@@ -511,7 +511,15 @@ function btError(e){
       ? 'Bluetooth är blockerat på den här publicerade sidan. Öppna appen på din GitHub-sida i Chrome eller Edge för att skanna på riktigt.'
       : 'Bluetooth nekades. Kontrollera att Bluetooth är på, att sidan fått tillåtelse och att den öppnats via https, localhost eller som lokal fil.';
   }
-  return 'Bluetooth svarade: ' + esc(e && e.message || String(e));
+  const msg = String(e && e.message || e || '');
+  if (/cancel/i.test(msg) || n === 'AbortError'){ S.cancels = (S.cancels || 0) + 1; }
+  if ((/cancel/i.test(msg) || n === 'AbortError') && S.cancels >= 2 && /Windows/i.test(navigator.userAgent))
+    return 'Fri skanning verkar inte fungera i Chrome på Windows – Chrome avbryter den även när du klickar Tillåt. Använd <b>Lägg till enhet</b> för att följa, larma och få dina egna prylar att pipa, eller använd appen i Chrome på en Android-telefon för radar och sökläge.';
+  if (/cancel/i.test(msg) || n === 'AbortError')
+    return 'Frågan om Bluetooth stängdes innan du svarade. Tryck på <b>Starta skanning</b> igen och klicka direkt på <b>Tillåt</b> i rutan under adressfältet. Visas ingen ruta: klicka på ikonen till vänster om adressen → Webbplatsinställningar → ställ Bluetooth-skanning på Fråga.';
+  if (/not (yet )?(supported|implemented)/i.test(msg) || n === 'NotSupportedError')
+    return 'Fri skanning stöds inte av Chrome på den här datorn. Använd <b>Lägg till enhet</b> för att följa enskilda prylar, eller prova appen i Chrome på en Android-telefon.';
+  return 'Bluetooth svarade: ' + esc(msg);
 }
 function noBt(){
   showNote(FRAMED
