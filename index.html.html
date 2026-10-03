@@ -1,0 +1,1427 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Blåtandsradar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: instrumentpanel – statusrad överst, flikar, radarskärm och enhetslista sida vid sida på bred skärm, staplade på mobil */
+:root{
+  --bg:#EBEFF2; --panel:#F8FAFB; --sunk:#E1E7EB; --line:#CFD7DD; --fg:#13212B; --muted:#596974;
+  --accent:#2646D4; --accent-soft:#DCE3FB;
+  --warn:#9A6200; --warn-soft:#FBEFD6; --crit:#C2342A; --crit-soft:#F8DEDB; --ok:#1A7D4C; --ok-soft:#D9F0E3;
+  --f-display:"Chakra Petch","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D151B; --panel:#141F27; --sunk:#0A1015; --line:#25333E; --fg:#E2E9EE; --muted:#8C9CA8;
+  --accent:#8299FF; --accent-soft:#1E2A55;
+  --warn:#F0B23F; --warn-soft:#382A0E; --crit:#FF7B6F; --crit-soft:#3A1916; --ok:#52CF8D; --ok-soft:#113122;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D151B; --panel:#141F27; --sunk:#0A1015; --line:#25333E; --fg:#E2E9EE; --muted:#8C9CA8;
+  --accent:#8299FF; --accent-soft:#1E2A55;
+  --warn:#F0B23F; --warn-soft:#382A0E; --crit:#FF7B6F; --crit-soft:#3A1916; --ok:#52CF8D; --ok-soft:#113122;
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:14px 40px;display:flex;flex-direction:column;gap:14px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:.01em}
+h1{font-size:1.45rem;font-weight:700}
+h2{font-size:1.1rem;font-weight:600}
+h3{font-size:.95rem;font-weight:600}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.lbl{font:600 .7rem/1 var(--f-body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+
+/* Topbar */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px}
+.brand svg{flex:none}
+.brand small{display:block;color:var(--muted);font-size:.8rem}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font:600 .75rem/1.4 var(--f-body);letter-spacing:.03em;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.live{background:var(--ok-soft);color:var(--ok)}
+.chip.demo{background:var(--accent-soft);color:var(--accent)}
+.chip.off{background:var(--sunk);color:var(--muted)}
+button{font:500 .875rem/1 var(--f-body);color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 13px;cursor:pointer;min-height:38px}
+button:hover{border-color:var(--muted)}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+button.small{padding:6px 9px;min-height:30px;font-size:.8rem}
+button:disabled{opacity:.5;cursor:default}
+select,input[type=number]{font:inherit;font-size:.875rem;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-height:36px}
+
+.note{padding:11px 14px;border-radius:var(--r);background:var(--accent-soft);color:var(--fg);font-size:.875rem;display:flex;gap:10px;align-items:flex-start}
+.note.warn{background:var(--warn-soft)}
+.note.crit{background:var(--crit-soft)}
+.note b{font-weight:600}
+.note code{font-family:var(--f-mono);font-size:.8rem;word-break:break-all}
+.note .x{margin-left:auto;background:none;border:0;padding:0 4px;min-height:0;color:var(--muted);font-size:1.1rem}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;padding:10px 14px;font:600 .9rem/1 var(--f-display);letter-spacing:.02em;color:var(--muted);white-space:nowrap;display:flex;gap:8px;align-items:center}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.tab .count{font:500 .72rem/1 var(--f-mono);background:var(--sunk);color:var(--muted);padding:3px 6px;border-radius:999px}
+.tab .count.alert{background:var(--crit-soft);color:var(--crit)}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.grid2{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}}
+
+/* Radar */
+.scope{display:flex;flex-direction:column;gap:10px}
+.scope canvas{width:100%;max-width:100%;aspect-ratio:1;display:block;border-radius:50%;background:var(--sunk);cursor:crosshair;touch-action:manipulation}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.78rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+.pin{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 16px;align-items:center}
+.pin .big{font:700 2.6rem/1 var(--f-display);font-variant-numeric:tabular-nums;grid-row:span 2}
+.pin .big small{font:500 .9rem var(--f-mono);color:var(--muted);margin-left:4px}
+.pin .name{font-weight:600;overflow-wrap:anywhere}
+.pin .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pin .acts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.meter{grid-column:1/-1;height:10px;border-radius:5px;background:var(--sunk);overflow:hidden;margin-top:8px}
+.meter>div{height:100%;background:var(--accent);border-radius:5px;transition:width .4s}
+.trend{font:600 .78rem/1 var(--f-body);padding:5px 9px;border-radius:999px;background:var(--sunk);color:var(--muted)}
+.trend.hot{background:var(--crit-soft);color:var(--crit)}
+.trend.cold{background:var(--accent-soft);color:var(--accent)}
+
+.listhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.devlist{display:flex;flex-direction:column}
+.dev{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:10px 6px;border-top:1px solid var(--line);background:none;border-radius:0;border-left:0;border-right:0;border-bottom:0;text-align:left;width:100%;min-height:0;font:inherit}
+.dev:first-child{border-top:0}
+.dev:hover{background:var(--sunk)}
+.dev.is-pinned{background:var(--accent-soft)}
+.dev .dot{width:10px;height:10px;border-radius:50%;grid-row:span 2}
+.dev .t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dev .s{font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dev .r{text-align:right;grid-row:span 2;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.dev .r .mono{font-size:.85rem}
+.bar{width:84px;height:5px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.bar>div{height:100%;background:var(--muted)}
+.empty{padding:22px 6px;color:var(--muted);font-size:.9rem}
+.mine{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:10px 4px;border-top:1px solid var(--line)}
+.mine:first-of-type{border-top:0}
+.mine .dot{width:10px;height:10px;border-radius:50%;grid-row:span 2;background:var(--muted)}
+.mine.in .dot{background:var(--ok)}
+.mine.out .dot{background:var(--crit)}
+.mine .t{font-weight:600;overflow-wrap:anywhere}
+.mine .s{font-size:.78rem;color:var(--muted)}
+.mine .b{grid-row:span 2;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+/* Sökläge */
+.hud{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;padding-block:20px}
+.hud .tgt{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
+.hud .tgt b{font:600 1.05rem/1.3 var(--f-display);overflow-wrap:anywhere}
+.orb{width:min(62vw,250px);max-width:100%;aspect-ratio:1;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--sunk);border:3px solid var(--line);transition:transform .35s,border-color .3s,background-color .3s}
+.orb .n{font:700 clamp(2.6rem,12vw,3.6rem)/1 var(--f-display);font-variant-numeric:tabular-nums}
+.orb .u{font:500 .85rem var(--f-mono);color:var(--muted)}
+.orb.hot{border-color:var(--crit);background:var(--crit-soft)}
+.orb.cold{border-color:var(--accent);background:var(--accent-soft)}
+.orb.lost{opacity:.55}
+.bigtrend{font:700 1.6rem/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.bigtrend.hot{color:var(--crit)}
+.bigtrend.cold{color:var(--accent)}
+.hud .meta{font-size:.875rem;color:var(--muted);max-width:44ch}
+.hud .hint{font-size:.875rem;padding:8px 12px;border-radius:8px;background:var(--warn-soft);max-width:44ch}
+.hud .acts{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.newchip{font:700 .65rem/1 var(--f-body);letter-spacing:.08em;padding:3px 6px;border-radius:4px;background:var(--crit);color:var(--panel);margin-right:6px;vertical-align:2px}
+.saved{display:flex;flex-wrap:wrap;gap:6px}
+.saved span{display:inline-flex;align-items:center;gap:4px;padding:4px 4px 4px 10px;border-radius:999px;background:var(--sunk);font-size:.85rem}
+.saved span button{min-height:0;padding:2px 7px;border:0;background:none;color:var(--muted)}
+.addrow{display:flex;gap:8px;flex-wrap:wrap}
+.addrow input{flex:1 1 160px;min-width:0;font:inherit;font-size:.875rem;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:38px}
+@media (prefers-reduced-motion:reduce){.orb{transition:none}}
+/* Pejling + spårkarta */
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.cvwrap{display:flex;justify-content:center}
+#pejlCv{width:min(100%,280px);aspect-ratio:1;display:block}
+#trackCv{width:100%;aspect-ratio:4/3;display:block;border-radius:8px;background:var(--sunk);touch-action:manipulation}
+.ptxt{font-size:.875rem;text-align:center}
+.ptxt b{font-family:var(--f-display);font-size:1.05rem}
+.rowbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rowbtns a{font-size:.85rem;color:var(--accent)}
+.mine .t input{font:inherit;font-size:.9rem;color:var(--fg);background:var(--panel);border:1px solid var(--accent);border-radius:6px;padding:5px 8px;width:min(100%,220px)}
+.mine.unknown .dot{background:var(--line)}
+.mine.check .dot{background:var(--muted)}
+
+/* Varnare */
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:560px){.stats{grid-template-columns:minmax(0,1fr)}}
+.stat{padding:14px 16px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.stat .v{font:700 2rem/1 var(--f-display);font-variant-numeric:tabular-nums}
+.stat.crit{background:var(--crit-soft);border-color:transparent}
+.stat.crit .v{color:var(--crit)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem;min-width:640px}
+th{text-align:left;font:600 .7rem/1 var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill{display:inline-block;font:600 .74rem/1 var(--f-body);padding:5px 9px;border-radius:999px;white-space:nowrap}
+.pill.crit{background:var(--crit-soft);color:var(--crit)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.mut{background:var(--sunk);color:var(--muted)}
+.settings{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:.875rem}
+.settings label{display:flex;gap:8px;align-items:center}
+.advice{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;font-size:.875rem}
+.advice div{display:flex;flex-direction:column;gap:4px}
+
+/* Inspektör */
+.svc{border-top:1px solid var(--line)}
+.svc:first-child{border-top:0}
+.svc summary{cursor:pointer;padding:10px 4px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;list-style:none}
+.svc summary::-webkit-details-marker{display:none}
+.svc summary::before{content:"▸";color:var(--muted);font-size:.8rem}
+.svc[open] summary::before{content:"▾"}
+.chr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:10px 4px 10px 20px;border-top:1px dashed var(--line);align-items:center}
+.chr .props{display:flex;flex-wrap:wrap;gap:4px}
+.chr .props span{font:500 .68rem/1 var(--f-mono);padding:3px 6px;border-radius:4px;background:var(--sunk);color:var(--muted)}
+.chr .val{grid-column:1/-1;font-family:var(--f-mono);font-size:.85rem;background:var(--sunk);padding:7px 10px;border-radius:6px;overflow-wrap:anywhere;min-height:2.1em}
+.chr .val.fresh{outline:1px solid var(--accent)}
+.chr .btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.log{font:.78rem/1.5 var(--f-mono);background:var(--sunk);border-radius:8px;padding:10px 12px;max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.help{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px;font-size:.875rem}
+.help ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.help code{font-family:var(--f-mono);font-size:.78rem;background:var(--sunk);padding:1px 5px;border-radius:4px;word-break:break-all}
+textarea#exportBox{width:100%;min-height:140px;font:.75rem/1.4 var(--f-mono);background:var(--sunk);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:.85rem;z-index:10}
+@media (prefers-reduced-motion:reduce){.meter>div{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true"><circle cx="19" cy="19" r="17" fill="none" stroke="var(--accent)" stroke-width="2"/><circle cx="19" cy="19" r="10" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity=".55"/><path d="M19 19 L19 2 A17 17 0 0 1 33.7 10.5 Z" fill="var(--accent)" opacity=".25"/><circle cx="19" cy="19" r="2.6" fill="var(--accent)"/><circle cx="27" cy="12" r="2" fill="var(--crit)"/></svg>
+      <div><h1>Blåtandsradar</h1><small>Hitta dina saker · upptäck spårare · inspektera enheter</small></div>
+    </div>
+    <div class="controls">
+      <span id="modeChip" class="chip demo">Demo</span>
+      <button id="btnLive" class="primary" type="button">Starta skanning</button>
+      <button id="btnAdd" type="button" title="Välj en enhet i Chromes lista och följ dess signal">Lägg till enhet</button>
+      <button id="btnDemo" type="button">Visa demo</button>
+    </div>
+  </header>
+
+  <div id="note" class="note" hidden><div id="noteText"></div><button class="x" type="button" id="noteClose" aria-label="Stäng">×</button></div>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-radar" aria-selected="true" data-tab="radar" type="button">Radar <span class="count" id="cntRadar">0</span></button>
+    <button class="tab" role="tab" id="tab-search" aria-selected="false" data-tab="search" type="button">Sök <span class="count" id="cntSearch">0</span></button>
+    <button class="tab" role="tab" id="tab-warn" aria-selected="false" data-tab="warn" type="button">Spårningsvarnare <span class="count" id="cntWarn">0</span></button>
+    <button class="tab" role="tab" id="tab-insp" aria-selected="false" data-tab="insp" type="button">Inspektör</button>
+    <button class="tab" role="tab" id="tab-help" aria-selected="false" data-tab="help" type="button">Hjälp</button>
+  </nav>
+
+  <!-- RADAR -->
+  <section id="view-radar" class="grid2">
+    <div class="panel scope">
+      <canvas id="radar" width="440" height="440" aria-label="Radarbild över enheter i närheten"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>Följd enhet</span>
+        <span><i style="background:var(--crit)"></i>Spårare</span>
+        <span><i style="background:var(--ok)"></i>Sensor</span>
+        <span><i style="background:var(--muted)"></i>Övriga</span>
+      </div>
+      <p class="muted" style="font-size:.78rem">Avståndet räknas fram ur signalstyrkan och är en grov uppskattning. Bluetooth ger ingen riktning, så vinkeln används bara för att hålla isär prickarna. Tryck på en prick för att följa den.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+      <div class="panel" id="pinPanel">
+        <div class="lbl" style="margin-bottom:10px">Varmt eller kallt</div>
+        <div id="pinBody"></div>
+      </div>
+      <div class="panel" id="minePanel" hidden>
+        <div class="listhead"><h2>Mina enheter</h2><span class="muted" style="font-size:.8rem" id="mineMode"></span></div>
+        <div id="mineList"></div>
+        <p class="muted" style="font-size:.78rem;margin-top:8px">Slå på <b>Larm</b> för att få en signal när en sak hamnar utom räckhåll. Larmet fungerar bara medan appen är öppen och skärmen tänd. Räckviddskollen utan skanning ansluter kort till enheten; hörlurar och telefoner tillåter ofta inte det, men nyckelbrickor, sensorer och de flesta BLE-prylar gör det.</p>
+      </div>
+      <div class="panel">
+        <div class="listhead">
+          <h2>I närheten</h2>
+          <label class="muted" style="display:flex;gap:8px;align-items:center;font-size:.85rem">Visa
+            <select id="filter">
+              <option value="all">Alla enheter</option>
+              <option value="named">Med namn</option>
+              <option value="tracker">Bara spårare</option>
+            </select>
+          </label>
+        </div>
+        <div class="devlist" id="devList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SÖK -->
+  <section id="view-search" hidden class="grid2">
+    <div class="col">
+      <div class="panel hud" id="hud"><div id="hudLive" class="hud" style="padding:0"></div><div id="hudActs"></div></div>
+      <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+        <div class="listhead" style="margin:0"><h2>Pejla riktning</h2><button type="button" class="small primary" id="btnPejl">Pejla</button></div>
+        <div class="cvwrap"><canvas id="pejlCv" width="280" height="280" aria-label="Kompassros med pejlad riktning"></canvas></div>
+        <p class="ptxt" id="pejlTxt"></p>
+      </div>
+      <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+        <div class="listhead" style="margin:0"><h2>Spårkarta</h2>
+          <div class="rowbtns"><button type="button" class="small primary" id="btnTrack">Spela in spår</button><button type="button" class="small" id="btnTrackClear">Rensa</button></div></div>
+        <canvas id="trackCv" width="440" height="330" aria-label="Karta över din väg färgad efter signalstyrka"></canvas>
+        <div class="rowbtns" style="justify-content:space-between"><span class="muted" style="font-size:.82rem" id="trackTxt"></span><a id="trackLink" href="#" target="_blank" rel="noopener" hidden>Öppna starkaste punkten i kartan</a></div>
+        <div class="legend"><span><i style="background:var(--accent)"></i>Svag signal</span><span><i style="background:var(--crit)"></i>Stark signal</span><span><i style="background:var(--line)"></i>Ingen signal</span></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+      <div class="note warn" id="searchLimit" hidden></div>
+      <div class="panel">
+        <div class="listhead">
+          <h2>Vad letar du efter?</h2>
+          <button type="button" class="small" id="btnRelearn" title="Allt som syns nu räknas som känt. Det som dyker upp efteråt markeras som NY.">Börja om här</button>
+        </div>
+        <div class="addrow" style="margin-bottom:8px"><input id="searchQ" type="search" placeholder="Filtrera på namn, t.ex. Forerunner" aria-label="Filtrera på namn"></div>
+        <div class="devlist" id="searchList"></div>
+      </div>
+      <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+        <h2>Sparade sökmål</h2>
+        <p class="muted" style="font-size:.85rem">Skriv namnet på en väns klocka, hörlurar eller tracker. När en enhet med det namnet dyker upp väljs den automatiskt och appen säger till.</p>
+        <div class="addrow"><input id="savedIn" type="text" placeholder="t.ex. Forerunner, Galaxy Buds, Annas klocka" aria-label="Nytt sökmål"><button type="button" id="btnSave">Lägg till</button></div>
+        <div class="saved" id="savedList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VARNARE -->
+  <section id="view-warn" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="stats">
+      <div class="stat"><span class="lbl">Enheter just nu</span><span class="v" id="stNow">0</span></div>
+      <div class="stat"><span class="lbl">Spårare i närheten</span><span class="v" id="stTrk">0</span></div>
+      <div class="stat" id="stFolBox"><span class="lbl">Följer med dig</span><span class="v" id="stFol">0</span></div>
+    </div>
+    <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+      <div class="listhead" style="margin:0">
+        <h2>Spårare som setts</h2>
+        <div class="settings">
+          <label>Larma efter <input id="thr" type="number" min="1" max="120" value="10" style="width:70px"> min</label>
+          <button id="btnGeo" type="button" class="small">Använd min plats</button>
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Typ</th><th>Först sedd</th><th>Med dig i</th><th>Signaler</th><th>Senast</th><th>Förflyttning</th><th>Status</th><th></th></tr></thead>
+          <tbody id="trkBody"></tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:.8rem" id="geoInfo">Förflyttning mäts bara när du slår på platsen. En spårare som syns på flera platser du besökt är en starkare varning än en som bara legat still nära dig.</p>
+    </div>
+    <div class="panel advice">
+      <div><h3>Hittat en som följer med?</h3><p>Öppna den i Radar med <b>Leta</b> och gå runt. Siffran stiger när du närmar dig. Kolla väskor, jackfickor, bilen och cykeln.</p></div>
+      <div><h3>Slå på mobilens egna varningar</h3><p>iPhone och Android har inbyggda varningar för okända spårare. De ser mer än en webbläsare och fungerar i bakgrunden.</p></div>
+      <div><h3>Känner du dig hotad?</h3><p>Ta inte bort spåraren i hemlighet om du är rädd. Kontakta polisen på <b class="mono">114 14</b>, eller <b class="mono">112</b> vid akut fara.</p></div>
+    </div>
+  </section>
+
+  <!-- INSPEKTÖR -->
+  <section id="view-insp" hidden class="grid2">
+    <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+      <h2>Anslut till en enhet</h2>
+      <p class="muted" style="font-size:.875rem">Chrome visar en lista där du väljer enheten. Appen ansluter, läser ut tjänster och värden som enheten delar, till exempel batterinivå, tillverkare eller puls.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="btnInspect" class="primary" type="button">Välj enhet…</button>
+        <button id="btnInspectDemo" type="button">Demo: pulsband</button>
+        <button id="btnDisconnect" type="button" disabled>Koppla från</button>
+      </div>
+      <div class="lbl">Logg</div>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+    <div class="panel" id="inspPanel" style="min-width:0"></div>
+  </section>
+
+  <!-- HJÄLP -->
+  <section id="view-help" hidden class="panel help">
+    <div>
+      <h3>Det här behövs</h3>
+      <ul>
+        <li>Chrome eller Edge på Android, Windows, macOS, Linux eller ChromeOS.</li>
+        <li>Bluetooth påslaget. På Android även Plats.</li>
+        <li>Safari och iPhone saknar Web Bluetooth. Appen Bluefy ger delvis stöd.</li>
+        <li>Sidan måste öppnas via <code>https://</code>, <code>localhost</code> eller som lokal fil i Chrome.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Slå på fri skanning</h3>
+      <p>Radar och Spårningsvarnare kräver Chromes experimentfunktion:</p>
+      <ul>
+        <li>Öppna <code>chrome://flags/#enable-experimental-web-platform-features</code></li>
+        <li>Välj <b>Enabled</b> och starta om Chrome.</li>
+        <li>Tryck på <b>Starta skanning</b> och godkänn frågan.</li>
+      </ul>
+      <p style="margin-top:6px">Inspektören fungerar utan flaggan.</p>
+    </div>
+    <div>
+      <h3>Så läser du siffrorna</h3>
+      <ul>
+        <li><b class="mono">dBm</b> är signalstyrka. −40 är mycket nära, −90 är långt bort eller bakom väggar.</li>
+        <li>Avståndet bygger på antagandet att signalen är −59 dBm på en meter. Kroppar och väggar dämpar, så se det som en riktning snarare än ett mått.</li>
+        <li>Telefoner byter Bluetooth-adress med jämna mellanrum. Samma telefon kan därför dyka upp som flera enheter.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>På iPhone</h3>
+      <ul>
+        <li>Safari och Chrome på iPhone saknar Bluetooth för webbsidor. Installera den kostnadsfria webbläsaren <b>Bluefy</b> från App Store.</li>
+        <li>Lägg appen på en https-adress, till exempel GitHub Pages, och öppna adressen i Bluefy.</li>
+        <li>Använd <b>Lägg till enhet</b> för att se om dina egna saker är inom räckhåll, och <b>Inspektören</b> för att läsa av dem.</li>
+        <li>iPhone tillåter inte fri skanning, så Radar och Spårningsvarnare visar bara demo. Mot spårare skyddar iPhones egna varningar i Hitta.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Integritet</h3>
+      <ul>
+        <li>Appen visar bara det enheter själva sänder ut. Den kan inte se vem som äger en enhet.</li>
+        <li>Inget skickas någonstans. Allt stannar i din webbläsare tills du stänger sidan.</li>
+        <li>En AirTag som skilts från sin ägare behåller samma adress längre, vilket är det varnaren letar efter.</li>
+      </ul>
+    </div>
+    <div style="grid-column:1/-1;display:flex;flex-direction:column;gap:8px">
+      <h3>Exportera logg</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="btnCopy" type="button">Kopiera som JSON</button>
+        <button id="btnDownload" type="button" hidden>Ladda ner JSON</button>
+      </div>
+      <textarea id="exportBox" hidden readonly aria-label="Exporterad logg"></textarea>
+    </div>
+  </section>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+/* ---------- Referensdata ---------- */
+const COMPANIES = {0x004C:'Apple',0x0006:'Microsoft',0x0075:'Samsung',0x00E0:'Google',0x0087:'Garmin',0x0059:'Nordic Semiconductor',0x0157:'Huami/Amazfit',0x012D:'Sony',0x0057:'Harman (JBL)',0x038F:'Xiaomi',0x027D:'Huawei'};
+const SERVICES = {'1800':'Generic Access','1801':'Generic Attribute','180a':'Enhetsinformation','180f':'Batteri','180d':'Puls','1809':'Termometer','181a':'Miljösensor','1816':'Cykel – fart och kadens','1818':'Cykel – effekt','181c':'Användardata','1812':'HID (tangentbord/mus)','fe59':'Nordic DFU (firmware)'};
+const CHARS = {'2a00':'Enhetsnamn','2a01':'Utseende','2a19':'Batterinivå','2a24':'Modellnummer','2a25':'Serienummer','2a26':'Firmware','2a27':'Hårdvara','2a28':'Mjukvara','2a29':'Tillverkare','2a37':'Pulsmätning','2a38':'Sensorplacering','2a6e':'Temperatur','2a6f':'Luftfuktighet','2a1c':'Temperaturmätning','2a05':'Tjänster ändrade'};
+const OPT_SERVICES = Object.keys(SERVICES).map(h => parseInt(h,16));
+const TEXT_CHARS = new Set(['2a00','2a24','2a25','2a26','2a27','2a28','2a29']);
+const shortU = u => { const m = /^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$/i.exec(String(u)); return m ? m[1].toLowerCase() : String(u).toLowerCase(); };
+const hex = b => Array.from(b, x => x.toString(16).padStart(2,'0')).join(' ');
+
+/* ---------- Tillstånd ---------- */
+const S = { devices:new Map(), mode:'demo', scan:null, pinned:null, demoTimer:null, thr:10, geo:null, geoWatch:null, sound:false, filter:'all', tab:'radar', insp:null, demoT0:Date.now() };
+
+/* ---------- Klassning ---------- */
+function classify(d){
+  const apple = d.mfr.get(0x004C), u = d.uuids;
+  if (apple && apple[0] === 0x12) return {kind:'tracker', label:'Apple Hitta (AirTag eller borttappad enhet)'};
+  if (u.has('fd5a')) return {kind:'tracker', label:'Samsung SmartTag'};
+  if (u.has('feed') || u.has('feec') || u.has('fd84')) return {kind:'tracker', label:'Tile'};
+  if (u.has('fe33')) return {kind:'tracker', label:'Chipolo'};
+  const g = d.svc.get('feaa');
+  if (g && (g[0] === 0x40 || g[0] === 0x41)) return {kind:'tracker', label:'Google Hitta min enhet'};
+  if (u.has('180d')) return {kind:'sensor', label:'Pulsmätare'};
+  if (u.has('181a') || u.has('1809')) return {kind:'sensor', label:'Sensor'};
+  if (apple) return {kind:'device', label:'Apple-enhet'};
+  for (const k of d.mfr.keys()) if (COMPANIES[k]) return {kind:'device', label:COMPANIES[k] + '-enhet'};
+  if (d.mfr.size) return {kind:'device', label:'Tillverkar-ID 0x' + [...d.mfr.keys()][0].toString(16).padStart(4,'0')};
+  return {kind:'unknown', label:'Okänd BLE-enhet'};
+}
+const displayName = d => (typeof regFor === 'function' && regFor(d)?.label) || d.name || d.cls?.label || 'Okänd enhet';
+const kindColor = (d, C) => d.id === S.pinned ? C.accent : d.cls.kind === 'tracker' ? C.crit : d.cls.kind === 'sensor' ? C.ok : C.muted;
+
+/* ---------- Mätvärden ---------- */
+function distance(d){
+  if (d.ema == null) return null;
+  const ref = d.tx != null ? d.tx - 41 : -59;
+  return Math.pow(10, (ref - d.ema) / (10 * 2.2));
+}
+const fmtDist = m => m == null ? '–' : m < 1 ? '< 1 m' : m < 10 ? '≈ ' + m.toFixed(1).replace('.', ',') + ' m' : '≈ ' + Math.round(m) + ' m';
+const strength = r => Math.max(0, Math.min(1, (r + 100) / 60));
+function trend(d){
+  const now = Date.now(), a = [], b = [];
+  for (const s of d.samples){ const age = now - s.t; if (age < 3000) a.push(s.r); else if (age < 8000) b.push(s.r); }
+  if (a.length < 2 || b.length < 2) return {k:'', t:'Mäter…'};
+  const avg = x => x.reduce((p,c)=>p+c,0)/x.length, diff = avg(a) - avg(b);
+  if (diff > 2) return {k:'hot', t:'Varmare'};
+  if (diff < -2) return {k:'cold', t:'Kallare'};
+  return {k:'', t:'Stilla'};
+}
+const fmtAgo = ms => { const s = Math.round(ms/1000); if (s < 60) return s + ' s'; const m = Math.round(s/60); if (m < 60) return m + ' min'; return Math.floor(m/60) + ' h ' + (m%60) + ' min'; };
+const fmtClock = t => new Date(t).toLocaleTimeString('sv-SE', {hour:'2-digit', minute:'2-digit'});
+function haversine(a, b){ const R=6371000, r=x=>x*Math.PI/180; const dLa=r(b.lat-a.lat), dLo=r(b.lon-a.lon); const h=Math.sin(dLa/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+function moved(d){
+  if (d.demoMoved != null) return d.demoMoved;
+  if (d.pos.length < 2) return null;
+  let m = 0; for (const p of d.pos) m = Math.max(m, haversine(d.pos[0], p)); return m;
+}
+
+/* ---------- Inmatning av annonser ---------- */
+function ingest(a){
+  if (a.rssi == null || a.rssi === 127) return;
+  const now = a.t || Date.now();
+  let d = S.devices.get(a.id);
+  if (!d){ d = {id:a.id, name:'', first:now, last:now, count:0, samples:[], mfr:new Map(), svc:new Map(), uuids:new Set(), tx:null, ema:null, pos:[], cls:null}; S.devices.set(a.id, d); }
+  if (a.name) d.name = a.name;
+  d.last = now; d.count++;
+  d.samples.push({t:now, r:a.rssi});
+  while (d.samples.length && now - d.samples[0].t > 60000) d.samples.shift();
+  d.ema = d.ema == null ? a.rssi : d.ema * 0.72 + a.rssi * 0.28;
+  if (a.txPower != null) d.tx = a.txPower;
+  if (a.mfr) a.mfr.forEach((v,k) => d.mfr.set(k, v));
+  if (a.svc) a.svc.forEach((v,k) => d.svc.set(k, v));
+  if (a.uuids) a.uuids.forEach(u => d.uuids.add(u));
+  d.cls = classify(d);
+  if (a.id === S.pinned){ notePeak(d, now); if (PJ.active) pjAdd(a.rssi); }
+  if (d.cls.kind === 'tracker' && S.geo && (!d.pos.length || now - d.pos[d.pos.length-1].t > 20000)) d.pos.push({t:now, lat:S.geo.lat, lon:S.geo.lon});
+}
+function onAdv(e){
+  const mfr = new Map(), svc = new Map();
+  try { e.manufacturerData && e.manufacturerData.forEach((v,k) => mfr.set(k, new Uint8Array(v.buffer, v.byteOffset, v.byteLength))); } catch {}
+  try { e.serviceData && e.serviceData.forEach((v,k) => svc.set(shortU(k), new Uint8Array(v.buffer, v.byteOffset, v.byteLength))); } catch {}
+  ingest({id:e.device.id, name:e.device.name || e.name || '', rssi:e.rssi, txPower:e.txPower, mfr, svc, uuids:(e.uuids || []).map(shortU)});
+  beepFor(e.device.id);
+}
+
+/* ---------- Demo ---------- */
+const DEMO = [
+  {id:'demo-airtag', name:'', base:-70, mfr:{0x004C:[0x12,0x19,0x10,0x4a,0x7e]}, firstAgo:27*60e3, count:310, moved:640},
+  {id:'demo-tile', name:'', base:-87, uuids:['feed'], firstAgo:4*60e3, count:22},
+  {id:'demo-pixel', name:'Pixel 8', base:-63, mfr:{0x00E0:[0x01,0x02]}},
+  {id:'demo-buds', name:'Galaxy Buds2', base:-52, mfr:{0x0075:[0x42,0x09]}},
+  {id:'demo-jbl', name:'JBL Flip 6', base:-77, mfr:{0x0057:[0x01]}, gap:true},
+  {id:'demo-band', name:'Mi Smart Band 7', base:-81, mfr:{0x038F:[0x00]}},
+  {id:'demo-hrm', name:'HRM-Dual', base:-66, uuids:['180d','180f']},
+  {id:'demo-ap1', name:'', base:-73, mfr:{0x004C:[0x10,0x05]}},
+  {id:'demo-ap2', name:'', base:-84, mfr:{0x004C:[0x10,0x07]}},
+  {id:'demo-tv', name:'[TV] Samsung 7 Series', base:-86, mfr:{0x0075:[0x42,0x04]}},
+  {id:'demo-garmin', name:'Forerunner 255', base:-69, mfr:{0x0087:[0x01]}},
+  {id:'demo-ms', name:'', base:-91, mfr:{0x0006:[0x01,0x09]}, flicker:true},
+  {id:'demo-friend', name:'Forerunner 965', base:-89, mfr:{0x0087:[0x02]}, appearAfter:9}
+];
+const toMap = o => new Map(Object.entries(o || {}).map(([k,v]) => [Number(k), Uint8Array.from(v)]));
+function startDemo(){
+  stopLive(); stopDemo();
+  S.devices.clear(); S.mode = 'demo'; S.demoT0 = Date.now();
+  const now = Date.now();
+  for (const p of DEMO){
+    if (p.appearAfter) continue;
+    ingest({id:p.id, name:p.name, rssi:p.base, mfr:toMap(p.mfr), uuids:p.uuids, t:now});
+    const d = S.devices.get(p.id);
+    d.first = now - (p.firstAgo ?? (60e3 + Math.random()*6*60e3));
+    d.count = p.count ?? Math.round(20 + Math.random()*200);
+    if (p.moved != null) d.demoMoved = p.moved;
+  }
+  S.pinned = 'demo-airtag';
+  S.demoTimer = setInterval(() => {
+    const t = (Date.now() - S.demoT0) / 1000;
+    for (const p of DEMO){
+      if (p.appearAfter && t < p.appearAfter) continue;
+      if (p.gap && (t % 90) > 30 && (t % 90) < 75) continue;
+      if (Math.random() < (p.flicker ? .15 : .55) && !(p.id === S.pinned && (PJ.active || TR.active))) continue;
+      let base = p.base;
+      if (p.id === S.pinned) base = demoPinnedBase(t);
+      ingest({id:p.id, name:p.name, rssi:Math.round(base + (Math.random()-.5)*6), mfr:toMap(p.mfr), uuids:p.uuids});
+      if (p.id === S.pinned) beepFor(p.id);
+    }
+  }, 450);
+  resetSearch(0);
+  setMode();
+  hideNote();
+}
+function stopDemo(){ if (S.demoTimer){ clearInterval(S.demoTimer); S.demoTimer = null; } }
+
+/* ---------- Live-skanning ---------- */
+function btError(e){
+  const n = e && e.name;
+  if (n === 'NotFoundError') return 'Ingen enhet valdes.';
+  if (n === 'SecurityError' || n === 'NotAllowedError'){
+    return FRAMED
+      ? 'Bluetooth är blockerat på den här publicerade sidan. Öppna <b>offline-filen</b> direkt i Chrome eller Edge för att skanna på riktigt. Demon fungerar här.'
+      : 'Bluetooth nekades. Kontrollera att Bluetooth är på, att sidan fått tillåtelse och att den öppnats via https, localhost eller som lokal fil.';
+  }
+  return 'Bluetooth svarade: ' + esc(e && e.message || String(e));
+}
+function noBt(){
+  showNote(FRAMED
+    ? 'Bluetooth går inte att nå från den här publicerade sidan. Öppna <b>offline-filen</b> i Chrome eller Edge för att skanna på riktigt.'
+    : IOS
+      ? 'Safari och Chrome på iPhone saknar Bluetooth för webbsidor. Öppna appen i webbläsaren <b>Bluefy</b> från App Store. Se fliken Hjälp.'
+      : 'Den här webbläsaren saknar Web Bluetooth. Använd Chrome eller Edge på Android eller dator.', 'crit');
+}
+async function startLive(){
+  if (S.mode === 'live'){ stopLive(); setMode(); return; }
+  if (!navigator.bluetooth){ noBt(); return; }
+  if (!navigator.bluetooth.requestLEScan && IOS){
+    showNote('iPhone tillåter inte fri skanning efter alla enheter. Använd <b>Lägg till enhet</b> för att hålla koll på dina egna saker, eller <b>Inspektören</b> för att läsa av en enhet.', 'warn');
+    return;
+  }
+  if (!navigator.bluetooth.requestLEScan){
+    showNote('Fri skanning är avstängd i din Chrome. Öppna <code>chrome://flags/#enable-experimental-web-platform-features</code>, välj Enabled och starta om. Under tiden kan du använda <b>Lägg till enhet</b> och Inspektören.', 'warn');
+    return;
+  }
+  try {
+    const scan = await navigator.bluetooth.requestLEScan({acceptAllAdvertisements:true, keepRepeatedDevices:true});
+    stopDemo();
+    if (S.mode !== 'add') S.devices.clear();
+    S.pinned = null; S.scan = scan; S.mode = 'live';
+    navigator.bluetooth.removeEventListener('advertisementreceived', onAdv);
+    navigator.bluetooth.addEventListener('advertisementreceived', onAdv);
+    resetSearch(5000); setMode(); hideNote(); toast('Skanning startad');
+  } catch (e){ showNote(btError(e), 'crit'); }
+}
+function stopLive(){
+  if (S.scan){ try { S.scan.stop(); } catch {} S.scan = null; }
+  try { navigator.bluetooth && navigator.bluetooth.removeEventListener('advertisementreceived', onAdv); } catch {}
+  if (S.mode === 'live') S.mode = 'stopped';
+}
+async function addDevice(){
+  if (!navigator.bluetooth){ noBt(); return; }
+  try {
+    const dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:OPT_SERVICES});
+    await attachDevice(dev);
+  } catch (e){ if (e.name !== 'NotFoundError') showNote(btError(e), 'crit'); }
+}
+async function attachDevice(dev){
+  if (S.mode === 'demo'){ stopDemo(); S.devices.clear(); S.mode = 'add'; S.pinned = null; setMode(); }
+  regAdd(dev.id, dev.name);
+  if (!dev.watchAdvertisements){
+      addMine(dev);
+      showNote(IOS
+        ? (dev.name || 'Enheten') + ' finns nu under <b>Mina enheter</b>. Appen kollar regelbundet om den svarar, så du ser om den är inom räckhåll.'
+        : (dev.name || 'Enheten') + ' finns nu under <b>Mina enheter</b> med räckviddskoll. För signalstyrka och varmt/kallt, slå på <code>chrome://flags/#enable-experimental-web-platform-features</code>.', '');
+      return;
+    }
+    dev.addEventListener('advertisementreceived', onAdv);
+    try { await dev.watchAdvertisements(); } catch { addMine(dev); }
+    if (S.mode !== 'live') S.mode = 'add';
+    S.pinned = dev.id;
+    ingestPlaceholder(dev);
+    setMode(); hideNote(); toast('Följer ' + (dev.name || 'enheten'));
+}
+function ingestPlaceholder(dev){
+  if (!S.devices.has(dev.id)) S.devices.set(dev.id, {id:dev.id, name:dev.name||'', first:Date.now(), last:Date.now(), count:0, samples:[], mfr:new Map(), svc:new Map(), uuids:new Set(), tx:null, ema:null, pos:[], cls:{kind:'device', label:'Vald enhet'}});
+}
+function setMode(){
+  const c = $('#modeChip'), b = $('#btnLive');
+  const map = {demo:['demo','Demo'], live:['live','Skannar live'], add:['live','Följer valda enheter'], stopped:['off','Stoppad']};
+  const [cls, txt] = map[S.mode] || map.stopped;
+  c.className = 'chip ' + cls; c.textContent = txt;
+  b.textContent = S.mode === 'live' ? 'Stoppa skanning' : 'Starta skanning';
+  $('#btnDemo').hidden = S.mode === 'demo';
+  renderAll();
+}
+
+/* ---------- Ljud (geigerklick) ---------- */
+let actx = null, lastBeep = 0;
+function beepFor(id){
+  if (id !== S.pinned) return;
+  if (SR.vibrate && navigator.vibrate){ const d0 = S.devices.get(id); if (d0 && d0.ema != null){ const n = performance.now(); if (n - SR.lastVib > 1400 - strength(d0.ema)*1200){ SR.lastVib = n; try { navigator.vibrate(25); } catch {} } } }
+  if (!S.sound) return;
+  const d = S.devices.get(id); if (!d || d.ema == null) return;
+  const now = performance.now(), gap = 1300 - strength(d.ema) * 1180;
+  if (now - lastBeep < gap) return;
+  lastBeep = now;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = 520 + strength(d.ema) * 900; o.type = 'square';
+    g.gain.setValueAtTime(0.08, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.06);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.07);
+  } catch {}
+}
+
+/* ---------- Radar ---------- */
+const cv = $('#radar'), ctx = cv.getContext('2d');
+const angleOf = id => { let h = 2166136261; for (const ch of id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return ((h >>> 0) % 3600) / 3600 * Math.PI * 2; };
+let hits = [];
+function colors(){ const cs = getComputedStyle(document.documentElement); const g = n => cs.getPropertyValue(n).trim(); return {bg:g('--sunk'), line:g('--line'), fg:g('--fg'), muted:g('--muted'), accent:g('--accent'), crit:g('--crit'), ok:g('--ok'), panel:g('--panel')}; }
+function draw(ts){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth || 400;
+  if (cv.width !== Math.round(w*dpr)){ cv.width = cv.height = Math.round(w*dpr); }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const C = colors(), cx = w/2, R = w/2 - 14;
+  const rad = m => R * Math.log10(1 + Math.min(m, 40)) / Math.log10(41);
+  ctx.clearRect(0,0,w,w);
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.fillStyle = C.muted; ctx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--f-mono');
+  for (const m of [1,3,10,30]){ const r = rad(m); ctx.beginPath(); ctx.arc(cx,cx,r,0,Math.PI*2); ctx.stroke(); ctx.fillText(m + ' m', cx + 4, cx - r + 13); }
+  ctx.beginPath(); ctx.moveTo(cx-R,cx); ctx.lineTo(cx+R,cx); ctx.moveTo(cx,cx-R); ctx.lineTo(cx,cx+R); ctx.globalAlpha=.5; ctx.stroke(); ctx.globalAlpha=1;
+  if (!REDUCED && S.mode !== 'stopped'){
+    const a = (ts / 2600) % (Math.PI*2);
+    const grd = ctx.createConicGradient ? ctx.createConicGradient(a - 0.9, cx, cx) : null;
+    if (grd){ grd.addColorStop(0, 'transparent'); grd.addColorStop(0.14, C.accent + '33'); grd.addColorStop(0.1401, 'transparent'); grd.addColorStop(1,'transparent'); ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx,cx,R,0,Math.PI*2); ctx.fill(); }
+  }
+  hits = [];
+  const now = Date.now();
+  for (const d of S.devices.values()){
+    const age = now - d.last; if (age > 30000 || d.ema == null) continue;
+    const m = distance(d), r = rad(m), an = angleOf(d.id);
+    const x = cx + Math.cos(an) * r, y = cx + Math.sin(an) * r;
+    const pinned = d.id === S.pinned;
+    ctx.globalAlpha = Math.max(.25, 1 - age/30000);
+    ctx.fillStyle = kindColor(d, C);
+    ctx.beginPath(); ctx.arc(x, y, pinned ? 7 : d.cls.kind === 'tracker' ? 6 : 4.5, 0, Math.PI*2); ctx.fill();
+    if (pinned){ ctx.strokeStyle = C.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y,13 + (REDUCED?0:Math.sin(ts/250)*2),0,Math.PI*2); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    hits.push({id:d.id, x, y});
+  }
+  ctx.fillStyle = C.fg; ctx.beginPath(); ctx.arc(cx,cx,4,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = C.muted; ctx.fillText('du', cx + 7, cx + 14);
+  requestAnimationFrame(draw);
+}
+cv.addEventListener('click', e => {
+  const b = cv.getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
+  let best = null, bd = 26;
+  for (const h of hits){ const dd = Math.hypot(h.x - x, h.y - y); if (dd < bd){ bd = dd; best = h; } }
+  if (best){ S.pinned = best.id; renderAll(); }
+});
+
+/* ---------- Rendering ---------- */
+function renderPin(){
+  const el = $('#pinBody'), d = S.devices.get(S.pinned);
+  if (!d){ el.innerHTML = '<p class="muted">Tryck på en enhet i listan eller på radarn för att följa den. Siffran stiger när du kommer närmare, så du kan leta upp hörlurar, nycklar eller en okänd spårare.</p>'; return; }
+  const tr = trend(d), stale = Date.now() - d.last > 8000;
+  el.innerHTML = `<div class="pin">
+    <div class="big">${d.ema == null ? '–' : Math.round(d.ema)}<small>dBm</small></div>
+    <div class="name">${esc(displayName(d))}</div>
+    <div class="row"><span class="trend ${stale ? '' : tr.k}">${stale ? 'Ingen signal just nu' : tr.t}</span><span class="mono muted" style="font-size:.85rem">${fmtDist(distance(d))}</span></div>
+    <div class="meter"><div style="width:${d.ema == null ? 0 : Math.round(strength(d.ema)*100)}%"></div></div>
+    <div class="acts">
+      <button type="button" class="small" id="btnSound">${S.sound ? 'Ljud av' : 'Ljud på'}</button>
+      <button type="button" class="small" id="btnUnpin">Sluta följa</button>
+      ${regFor(d) ? `<span class="pill ok">Sparad som ${esc(regFor(d).label)}</span>` : '<button type="button" class="small" id="btnSaveMine">Spara som min enhet</button>'}
+    </div></div>`;
+  $('#btnSound').onclick = () => { S.sound = !S.sound; try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch {} renderPin(); };
+  $('#btnUnpin').onclick = () => { S.pinned = null; renderAll(); };
+  const sm = $('#btnSaveMine'); if (sm) sm.onclick = () => { regAdd(d.id, d.name, d.name || d.cls.label); MINE_EDIT = d.id; renderAll(); toast('Sparad – ge den ett eget namn under Mina enheter'); };
+}
+function renderList(){
+  const now = Date.now();
+  let list = [...S.devices.values()].filter(d => now - d.last < 30000 && d.ema != null);
+  if (S.filter === 'named') list = list.filter(d => d.name);
+  if (S.filter === 'tracker') list = list.filter(d => d.cls.kind === 'tracker');
+  list.sort((a,b) => b.ema - a.ema);
+  const C = colors();
+  const el = $('#devList');
+  if (!list.length){
+    el.innerHTML = `<div class="empty">${S.mode === 'live' ? 'Lyssnar… Enheter dyker upp här när de sänder.' : S.mode === 'add' ? 'Väntar på signal från vald enhet. Den måste vara påslagen och i närheten.' : 'Inga enheter. Starta skanning eller visa demon.'}</div>`;
+    return;
+  }
+  el.innerHTML = list.map(d => {
+    const sub = [d.name ? d.cls.label : null, 'id ' + d.id.slice(0,8)].filter(Boolean).join(' · ');
+    return `<button type="button" class="dev${d.id === S.pinned ? ' is-pinned' : ''}" data-id="${esc(d.id)}">
+      <span class="dot" style="background:${kindColor(d, C)}"></span>
+      <span class="t">${esc(displayName(d))}</span>
+      <span class="r"><span class="mono">${Math.round(d.ema)} dBm</span><span class="bar"><div style="width:${Math.round(strength(d.ema)*100)}%;${d.cls.kind==='tracker'?'background:var(--crit)':''}"></div></span></span>
+      <span class="s">${esc(sub)} · ${fmtDist(distance(d))}</span>
+    </button>`;
+  }).join('');
+}
+function trackerStatus(d){
+  const now = Date.now(), span = d.last - d.first;
+  if (now - d.last > 120000) return {k:'mut', t:'Borta', rank:0};
+  const mv = moved(d);
+  if ((span >= S.thr*60000 && d.count >= 5) || (mv != null && mv > 300 && d.count >= 5)) return {k:'crit', t:'Följer med', rank:2};
+  return {k:'warn', t:'Bevakas', rank:1};
+}
+function renderWarn(){
+  const now = Date.now(), all = [...S.devices.values()];
+  const nowList = all.filter(d => now - d.last < 30000);
+  const trk = all.filter(d => d.cls && d.cls.kind === 'tracker').map(d => ({d, st:trackerStatus(d)})).sort((a,b) => b.st.rank - a.st.rank || b.d.last - a.d.last);
+  const fol = trk.filter(x => x.st.rank === 2).length;
+  $('#stNow').textContent = nowList.length;
+  $('#stTrk').textContent = trk.filter(x => x.st.rank > 0).length;
+  $('#stFol').textContent = fol;
+  $('#stFolBox').classList.toggle('crit', fol > 0);
+  $('#cntRadar').textContent = nowList.length;
+  const cw = $('#cntWarn'); cw.textContent = fol || trk.filter(x => x.st.rank > 0).length; cw.classList.toggle('alert', fol > 0);
+  if (S.tab !== 'warn') return;
+  $('#trkBody').innerHTML = trk.length ? trk.map(({d, st}) => {
+    const mv = moved(d);
+    return `<tr>
+      <td><b>${esc(d.cls.label)}</b>${d.name ? `<br><span class="muted">${esc(d.name)}</span>` : ''}</td>
+      <td class="num">${fmtClock(d.first)}</td>
+      <td class="num">${fmtAgo(d.last - d.first)}</td>
+      <td class="num">${d.count}</td>
+      <td class="num">${fmtAgo(now - d.last)} sedan</td>
+      <td class="num">${mv == null ? '–' : mv < 1000 ? Math.round(mv) + ' m' : (mv/1000).toFixed(1).replace('.',',') + ' km'}</td>
+      <td><span class="pill ${st.k}">${st.t}</span></td>
+      <td><button type="button" class="small" data-hunt="${esc(d.id)}">Leta</button></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8" class="muted" style="padding:20px 10px">Inga spårare har setts. Varnaren känner igen AirTag och andra Apple Hitta-enheter, Samsung SmartTag, Tile, Chipolo och Googles Hitta min enhet.</td></tr>';
+}
+/* ---------- Mina enheter: sparade, döpta, räckviddskoll och kvarglömt-larm ---------- */
+const mine = new Map();            // GATT-räckviddskoll (iPhone/utan skanning)
+const REG_KEY = 'bt-radar-mine';
+let REG = []; try { REG = JSON.parse(localStorage.getItem(REG_KEY) || '[]').filter(r => r && r.id); } catch {}
+const DREG = [
+  {id:'demo-hrm', name:'HRM-Dual', label:'Pulsbandet', alarm:false},
+  {id:'demo-jbl', name:'JBL Flip 6', label:'Högtalaren', alarm:false},
+  {id:'demo-garmin', name:'Forerunner 255', label:'Min klocka', alarm:false}];
+let MINE_EDIT = null;
+const reg = () => S.mode === 'demo' ? DREG : REG;
+function saveReg(){ if (S.mode === 'demo') return; try { localStorage.setItem(REG_KEY, JSON.stringify(REG.map(({id, name, label, alarm}) => ({id, name, label, alarm})))); } catch {} }
+function regFor(d){ return reg().find(r => r.id === d.id || (r.name && d.name && r.name === d.name)); }
+function regAdd(id, name, label){
+  const L = reg(); let r = L.find(x => x.id === id);
+  if (!r){ r = {id, name:name || '', label:label || name || 'Min enhet', alarm:false}; L.push(r); }
+  saveReg(); renderMine(); return r;
+}
+function findDev(r){
+  let best = null;
+  for (const d of S.devices.values()) if (d.id === r.id || (r.name && d.name === r.name)) if (!best || d.last > best.last) best = d;
+  return best;
+}
+function addMine(dev){
+  if (mine.has(dev.id)){ checkMine(dev.id); return; }
+  mine.set(dev.id, {dev, name:dev.name || 'Namnlös enhet', status:'check', lastOk:null, battery:null, busy:false, fails:0, timer:setInterval(() => checkMine(dev.id), 20000)});
+  renderMine(); checkMine(dev.id);
+}
+async function checkMine(id){
+  const m = mine.get(id); if (!m || m.busy) return;
+  m.busy = true; if (m.status !== 'in' && m.status !== 'out') m.status = 'check';
+  try {
+    const server = await Promise.race([m.dev.gatt.connect(), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))]);
+    m.status = 'in'; m.lastOk = Date.now(); m.fails = 0;
+    try { const sv = await server.getPrimaryService(0x180f); const c = await sv.getCharacteristic(0x2a19); m.battery = (await c.readValue()).getUint8(0); } catch {}
+    try { m.dev.gatt.disconnect(); } catch {}
+  } catch {
+    m.fails++; if (m.fails >= 2 || m.status === 'check') m.status = 'out';
+    try { m.dev.gatt.disconnect(); } catch {}
+  }
+  m.busy = false; renderMine();
+}
+function regStatus(r){
+  const now = Date.now(), m = mine.get(r.id);
+  if (m) return {s:m.status, sub:(m.lastOk ? 'Senast svar för ' + fmtAgo(now - m.lastOk) + ' sedan' : 'Inget svar än') + (m.battery != null ? ' · batteri ' + m.battery + ' %' : '')};
+  const d = findDev(r);
+  if (d && d.ema != null){
+    const ago = now - d.last;
+    return ago < 30000 ? {s:'in', sub:Math.round(d.ema) + ' dBm · ' + fmtDist(distance(d))} : {s:'out', sub:'Hördes senast för ' + fmtAgo(ago) + ' sedan'};
+  }
+  return {s:'unknown', sub:S.mode === 'stopped' ? 'Skanningen är stoppad' : 'Inte hörd ännu'};
+}
+/* Larm */
+const AL = {active:new Set(), timer:null, titleT:null, origTitle:document.title};
+function alarmSound(){
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume && actx.resume(); const t0 = actx.currentTime;
+    for (let i = 0; i < 3; i++){ const o = actx.createOscillator(), g = actx.createGain(); o.type = 'sawtooth'; o.frequency.value = i % 2 ? 1180 : 880;
+      g.gain.setValueAtTime(0.0001, t0 + i*0.28); g.gain.exponentialRampToValueAtTime(0.18, t0 + i*0.28 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i*0.28 + 0.24);
+      o.connect(g).connect(actx.destination); o.start(t0 + i*0.28); o.stop(t0 + i*0.28 + 0.25); }
+  } catch {}
+  try { navigator.vibrate && navigator.vibrate([300, 150, 300, 150, 300]); } catch {}
+}
+function alarmUpdate(){
+  const labels = reg().filter(r => AL.active.has(r.id)).map(r => r.label);
+  if (!labels.length){
+    clearInterval(AL.timer); AL.timer = null; clearInterval(AL.titleT); AL.titleT = null; document.title = AL.origTitle;
+    if ($('#alarmMute')) hideNote();
+    return;
+  }
+  showNote(`<b>${esc(labels.join(', '))}</b> ${labels.length > 1 ? 'är' : 'är'} utom räckhåll! Har du glömt något? <button type="button" class="small" id="alarmMute" style="margin-left:8px">Tysta larmet</button>`, 'crit');
+  $('#alarmMute').onclick = () => { reg().forEach(r => { if (AL.active.has(r.id)) r._muted = true; }); AL.active.clear(); alarmUpdate(); };
+  if (!AL.timer){ alarmSound(); AL.timer = setInterval(alarmSound, 4000); }
+  if (!AL.titleT){ let f = false; AL.titleT = setInterval(() => { f = !f; document.title = f ? '⚠ Utom räckhåll' : AL.origTitle; }, 900); }
+}
+function handleAlarm(r, s){
+  const prev = r._prev; r._prev = s;
+  if (s === 'in'){ r._muted = false; if (AL.active.delete(r.id)) alarmUpdate(); return; }
+  if (r.alarm && !r._muted && prev === 'in' && s === 'out' && !AL.active.has(r.id)){ AL.active.add(r.id); alarmUpdate(); }
+}
+function removeReg(id){
+  const m = mine.get(id); if (m){ clearInterval(m.timer); try { m.dev.gatt.disconnect(); } catch {} mine.delete(id); }
+  const L = reg(), i = L.findIndex(r => r.id === id); if (i >= 0) L.splice(i, 1);
+  if (AL.active.delete(id)) alarmUpdate();
+  saveReg(); renderAll();
+}
+async function reconnect(id){
+  const r = reg().find(x => x.id === id);
+  if (!r) return;
+  if (!navigator.bluetooth){ noBt(); return; }
+  try {
+    let dev = null;
+    if (navigator.bluetooth.getDevices){ try { dev = (await navigator.bluetooth.getDevices()).find(x => x.id === id) || null; } catch {} }
+    if (!dev) dev = await navigator.bluetooth.requestDevice(r.name ? {filters:[{name:r.name}], optionalServices:OPT_SERVICES} : {acceptAllDevices:true, optionalServices:OPT_SERVICES});
+    if (dev.id !== r.id && !reg().some(x => x.id === dev.id)){ r.id = dev.id; saveReg(); }
+    await attachDevice(dev);
+  } catch (e){ if (e.name !== 'NotFoundError') showNote(btError(e), 'crit'); }
+}
+function mineRowHtml(r){
+  const editing = MINE_EDIT === r.id;
+  return `<div class="mine" data-mrow="${esc(r.id)}"><span class="dot"></span>
+    <span class="t">${editing ? `<input id="mineEditIn" type="text" value="${esc(r.label)}" aria-label="Nytt namn" maxlength="40">` : esc(r.label)} <span class="pill mut" data-pill style="margin-left:6px">–</span></span>
+    <span class="b">${editing
+      ? '<button type="button" class="small primary" data-msave>Spara</button><button type="button" class="small" data-mcancel>Avbryt</button>'
+      : `<button type="button" class="small" data-malarm="${esc(r.id)}" aria-pressed="${!!r.alarm}">Larm</button><button type="button" class="small" data-mren="${esc(r.id)}">Döp om</button><button type="button" class="small" data-mcheck="${esc(r.id)}" hidden>Kolla nu</button><button type="button" class="small" data-mrecon="${esc(r.id)}" hidden>Återanslut</button><button type="button" class="small" data-mdel="${esc(r.id)}">Ta bort</button>`}</span>
+    <span class="s" data-sub>${r.name && r.name !== r.label ? esc(r.name) + ' · ' : ''}</span></div>`;
+}
+function renderMine(){
+  const L = reg(), el = $('#mineList');
+  $('#minePanel').hidden = !L.length;
+  if (!L.length) return;
+  $('#mineMode').textContent = S.mode === 'demo' ? 'Exempel i demon' : mine.size ? 'Kollas var 20:e sekund' : '';
+  const sig = S.mode + '|' + L.map(r => r.id + ':' + r.label + ':' + r.alarm + ':' + (MINE_EDIT === r.id)).join(';');
+  if (el._sig !== sig){
+    el._sig = sig; el.innerHTML = L.map(mineRowHtml).join('');
+    const inp = $('#mineEditIn'); if (inp){ inp.focus(); inp.select(); }
+  }
+  for (const r of L){
+    const row = el.querySelector(`[data-mrow="${CSS.escape(r.id)}"]`); if (!row) continue;
+    const st = regStatus(r); handleAlarm(r, st.s);
+    row.className = 'mine ' + st.s;
+    const pill = row.querySelector('[data-pill]');
+    const P = {in:['ok','Inom räckhåll'], out:['crit', AL.active.has(r.id) ? 'Larmar' : 'Utom räckhåll'], check:['mut','Kollar…'], unknown:['mut','Ej hörd']}[st.s] || ['mut','–'];
+    pill.className = 'pill ' + P[0]; pill.textContent = P[1];
+    row.querySelector('[data-sub]').textContent = (r.name && r.name !== r.label ? r.name + ' · ' : '') + st.sub;
+    const ck = row.querySelector('[data-mcheck]'); if (ck) ck.hidden = !mine.has(r.id);
+    const rc = row.querySelector('[data-mrecon]'); if (rc) rc.hidden = S.mode === 'demo' || mine.has(r.id) || st.s === 'in';
+  }
+}
+function saveEdit(){
+  const inp = $('#mineEditIn'), r = reg().find(x => x.id === MINE_EDIT);
+  if (r && inp && inp.value.trim()){ r.label = inp.value.trim(); saveReg(); }
+  MINE_EDIT = null; renderAll();
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t || !t.closest('#mineList')) return;
+  const ds = t.dataset;
+  if (ds.mcheck) checkMine(ds.mcheck);
+  else if (ds.mdel) removeReg(ds.mdel);
+  else if (ds.mrecon) reconnect(ds.mrecon);
+  else if (ds.mren){ MINE_EDIT = ds.mren; renderMine(); }
+  else if (ds.malarm){
+    const r = reg().find(x => x.id === ds.malarm); if (!r) return;
+    r.alarm = !r.alarm; r._muted = false; saveReg();
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume && actx.resume(); } catch {}
+    if (!r.alarm && AL.active.delete(r.id)) alarmUpdate();
+    toast(r.alarm ? 'Larm på för ' + r.label : 'Larm av för ' + r.label); renderMine();
+  }
+  else if ('msave' in ds) saveEdit();
+  else if ('mcancel' in ds){ MINE_EDIT = null; renderMine(); }
+});
+document.addEventListener('keydown', e => { if (e.target.id === 'mineEditIn'){ if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape'){ MINE_EDIT = null; renderMine(); } } });
+
+function renderAll(){ renderPin(); renderList(); renderWarn(); renderMine(); renderSearch(); }
+
+/* ---------- Inspektör ---------- */
+function log(msg){ const el = $('#log'); el.textContent += '[' + new Date().toLocaleTimeString('sv-SE') + '] ' + msg + '\n'; el.scrollTop = el.scrollHeight; }
+function decode(uuid, dv){
+  try {
+    if (uuid === '2a19') return dv.getUint8(0) + ' %';
+    if (uuid === '2a37'){ const f = dv.getUint8(0); return (f & 1 ? dv.getUint16(1, true) : dv.getUint8(1)) + ' slag/min'; }
+    if (uuid === '2a38') return ['Annat','Bröst','Handled','Finger','Hand','Örsnibb','Fot'][dv.getUint8(0)] || 'Okänd';
+    if (uuid === '2a6e') return (dv.getInt16(0, true)/100).toFixed(2).replace('.',',') + ' °C';
+    if (uuid === '2a6f') return (dv.getUint16(0, true)/100).toFixed(1).replace('.',',') + ' % RH';
+    if (uuid === '2a01') return 'Kod ' + dv.getUint16(0, true);
+    const b = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+    if (TEXT_CHARS.has(uuid)) return new TextDecoder().decode(b);
+    const printable = b.length && b.every(x => x >= 32 && x < 127);
+    return (b.length ? hex(b) : '(tomt)') + (printable ? '  "' + String.fromCharCode(...b) + '"' : '');
+  } catch { return hex(new Uint8Array(dv.buffer)); }
+}
+function renderInspector(){
+  const el = $('#inspPanel'), m = S.insp;
+  $('#btnDisconnect').disabled = !m;
+  if (!m){ el.innerHTML = '<h2>Ingen enhet ansluten</h2><p class="muted" style="margin-top:6px;font-size:.9rem">Välj en enhet för att se dess tjänster och värden. Prova demon med ett pulsband om du inte har någon enhet till hands.</p>'; return; }
+  el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:8px"><h2>${esc(m.name)}</h2><span class="mono muted" style="font-size:.78rem">id ${esc(m.id.slice(0,12))}</span></div>` +
+    (m.services.length ? m.services.map((s, si) => `<details class="svc" open><summary><b>${esc(SERVICES[s.uuid] || 'Okänd tjänst')}</b><span class="mono muted" style="font-size:.78rem">${esc(s.uuid)}</span></summary>${
+      s.chars.length ? s.chars.map((c, ci) => {
+        const p = c.props || {}, tags = ['read','write','writeWithoutResponse','notify','indicate'].filter(k => p[k]).map(k => ({read:'läs',write:'skriv',writeWithoutResponse:'skriv*',notify:'notis',indicate:'indikera'}[k]));
+        return `<div class="chr"><div><b>${esc(CHARS[c.uuid] || 'Egenskap')}</b> <span class="mono muted" style="font-size:.75rem">${esc(c.uuid)}</span><div class="props">${tags.map(t => `<span>${t}</span>`).join('')}</div></div>
+        <div class="btns">${p.read ? `<button type="button" class="small" data-read="${si}.${ci}">Läs</button>` : ''}${(p.notify||p.indicate) ? `<button type="button" class="small" data-notify="${si}.${ci}">${c.on ? 'Stoppa' : 'Lyssna'}</button>` : ''}</div>
+        <div class="val" id="val-${si}-${ci}">${c.value != null ? esc(c.value) : '<span class="muted">–</span>'}</div></div>`;
+      }).join('') : '<p class="muted" style="padding:6px 20px">Inga läsbara egenskaper.</p>'
+    }</details>`).join('') : '<p class="muted">Enheten delade inga tjänster som appen har behörighet till.</p>');
+}
+function setVal(si, ci, text){
+  const c = S.insp.services[si].chars[ci]; c.value = text;
+  const v = document.getElementById(`val-${si}-${ci}`); if (v){ v.textContent = text; v.classList.add('fresh'); setTimeout(() => v.classList.remove('fresh'), 400); }
+}
+async function readChar(si, ci){
+  const c = S.insp.services[si].chars[ci];
+  try { const dv = await c.read(); setVal(si, ci, decode(c.uuid, dv)); log('Läste ' + (CHARS[c.uuid] || c.uuid)); }
+  catch (e){ setVal(si, ci, 'Kunde inte läsa: ' + (e.message || e.name)); log('Fel vid läsning av ' + c.uuid + ': ' + (e.message || e.name)); }
+}
+async function toggleNotify(si, ci){
+  const c = S.insp.services[si].chars[ci];
+  try {
+    if (c.on){ await c.stop(); c.on = false; log('Slutade lyssna på ' + (CHARS[c.uuid] || c.uuid)); }
+    else { await c.start(dv => setVal(si, ci, decode(c.uuid, dv))); c.on = true; log('Lyssnar på ' + (CHARS[c.uuid] || c.uuid)); }
+  } catch (e){ log('Fel: ' + (e.message || e.name)); }
+  renderInspector();
+}
+async function inspectReal(){
+  if (!navigator.bluetooth){ noBt(); return; }
+  try {
+    log('Öppnar Chromes enhetsväljare…');
+    const dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:OPT_SERVICES});
+    await disconnect();
+    log('Ansluter till ' + (dev.name || 'namnlös enhet') + '…');
+    dev.addEventListener('gattserverdisconnected', () => { log('Enheten kopplades från.'); if (S.insp && S.insp.dev === dev){ S.insp = null; renderInspector(); } });
+    const server = await dev.gatt.connect();
+    const svcs = await server.getPrimaryServices().catch(() => []);
+    const model = {dev, name:dev.name || 'Namnlös enhet', id:dev.id, services:[]};
+    for (const s of svcs){
+      const chars = await s.getCharacteristics().catch(() => []);
+      model.services.push({uuid:shortU(s.uuid), chars:chars.map(c => {
+        let handler = null;
+        return {uuid:shortU(c.uuid), props:c.properties, read:() => c.readValue(),
+          start: async cb => { handler = e => cb(e.target.value); c.addEventListener('characteristicvaluechanged', handler); await c.startNotifications(); },
+          stop: async () => { await c.stopNotifications(); if (handler) c.removeEventListener('characteristicvaluechanged', handler); }};
+      })});
+    }
+    log('Hittade ' + model.services.length + ' tjänster.');
+    S.insp = model; renderInspector();
+    for (let si = 0; si < model.services.length; si++) for (let ci = 0; ci < model.services[si].chars.length; ci++) if (model.services[si].chars[ci].props.read) await readChar(si, ci);
+  } catch (e){ if (e.name === 'NotFoundError') log('Ingen enhet valdes.'); else { log('Fel: ' + (e.message || e.name)); showNote(btError(e), 'crit'); } }
+}
+function demoInspect(){
+  disconnect();
+  const dv = arr => new DataView(Uint8Array.from(arr).buffer);
+  const txt = s => new DataView(new TextEncoder().encode(s).buffer);
+  let timer = null;
+  const ro = (uuid, fn) => ({uuid, props:{read:true}, read: async () => fn()});
+  S.insp = {name:'HRM-Dual (demo)', id:'demo-hrm-0001', dev:null, services:[
+    {uuid:'180d', chars:[
+      {uuid:'2a37', props:{notify:true}, start: async cb => { timer = setInterval(() => cb(dv([0, 118 + Math.round(Math.sin(Date.now()/4000)*14 + Math.random()*4)])), 1000); }, stop: async () => clearInterval(timer)},
+      ro('2a38', () => dv([1]))]},
+    {uuid:'180f', chars:[{...ro('2a19', () => dv([82])), props:{read:true, notify:true}, start: async cb => cb(dv([82])), stop: async () => {}}]},
+    {uuid:'180a', chars:[ro('2a29', () => txt('Garmin')), ro('2a24', () => txt('HRM-Dual')), ro('2a26', () => txt('3.20'))]}
+  ]};
+  S.insp.cleanup = () => clearInterval(timer);
+  log('Demo: ansluten till HRM-Dual.');
+  renderInspector();
+  S.insp.services.forEach((s, si) => s.chars.forEach((c, ci) => { if (c.props.read) readChar(si, ci); }));
+}
+async function disconnect(){
+  const m = S.insp; if (!m) return;
+  try { m.cleanup && m.cleanup(); } catch {}
+  try { m.dev && m.dev.gatt.connected && m.dev.gatt.disconnect(); } catch {}
+  S.insp = null; log('Frånkopplad.'); renderInspector();
+}
+
+/* ---------- Plats ---------- */
+function toggleGeo(){
+  if (S.geoWatch != null){ navigator.geolocation.clearWatch(S.geoWatch); S.geoWatch = null; S.geo = null; $('#btnGeo').textContent = 'Använd min plats'; return; }
+  if (!navigator.geolocation){ showNote('Webbläsaren ger ingen plats.', 'warn'); return; }
+  S.geoWatch = navigator.geolocation.watchPosition(p => { S.geo = {lat:p.coords.latitude, lon:p.coords.longitude}; $('#btnGeo').textContent = 'Plats på · stäng av'; },
+    e => { navigator.geolocation.clearWatch(S.geoWatch); S.geoWatch = null; showNote(FRAMED ? 'Platsen är blockerad på den publicerade sidan. Den fungerar i offline-filen.' : 'Platsen nekades: ' + esc(e.message), 'warn'); },
+    {enableHighAccuracy:true, maximumAge:15000});
+}
+
+/* ---------- Export ---------- */
+function exportJson(){
+  return JSON.stringify({exporterad:new Date().toISOString(), läge:S.mode, enheter:[...S.devices.values()].map(d => ({
+    id:d.id, namn:d.name || null, typ:d.cls?.label, kategori:d.cls?.kind, förstSedd:new Date(d.first).toISOString(), senastSedd:new Date(d.last).toISOString(),
+    signaler:d.count, rssi:d.ema == null ? null : Math.round(d.ema), uppskattatAvstånd_m:distance(d) == null ? null : +distance(d).toFixed(1),
+    egetNamn:(regFor(d) || {}).label || null,
+    tillverkardata:Object.fromEntries([...d.mfr].map(([k,v]) => ['0x' + k.toString(16).padStart(4,'0'), hex(v)])), tjänster:[...d.uuids]
+  })), spår:TR.pts}, null, 2);
+}
+
+/* ---------- UI-hjälp ---------- */
+function showNote(html, kind){ $('#noteText').innerHTML = html; $('#note').className = 'note' + (kind ? ' ' + kind : ''); $('#note').hidden = false; }
+function hideNote(){ $('#note').hidden = true; }
+let toastT = null;
+function toast(t){ const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 1800); }
+function setTab(t){
+  S.tab = t;
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  for (const v of ['radar','search','warn','insp','help']) $('#view-' + v).hidden = v !== t;
+  try { localStorage.setItem('bt-radar-tab', t); } catch {}
+  renderAll();
+}
+
+/* ---------- Händelser ---------- */
+$('#btnLive').onclick = startLive;
+$('#btnAdd').onclick = addDevice;
+$('#btnDemo').onclick = startDemo;
+$('#noteClose').onclick = hideNote;
+$('#filter').onchange = e => { S.filter = e.target.value; renderList(); };
+$('#thr').onchange = e => { S.thr = Math.max(1, Math.min(120, +e.target.value || 10)); renderWarn(); };
+$('#btnGeo').onclick = toggleGeo;
+$('#btnInspect').onclick = inspectReal;
+$('#btnInspectDemo').onclick = demoInspect;
+$('#btnDisconnect').onclick = disconnect;
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+$('#devList').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; S.pinned = S.pinned === b.dataset.id ? null : b.dataset.id; renderAll(); });
+$('#trkBody').addEventListener('click', e => { const b = e.target.closest('[data-hunt]'); if (!b) return; S.pinned = b.dataset.hunt; setTab('radar'); });
+$('#inspPanel').addEventListener('click', e => {
+  const r = e.target.closest('[data-read]'), n = e.target.closest('[data-notify]');
+  if (r){ const [si,ci] = r.dataset.read.split('.').map(Number); readChar(si, ci); }
+  if (n){ const [si,ci] = n.dataset.notify.split('.').map(Number); toggleNotify(si, ci); }
+});
+$('#btnCopy').onclick = () => {
+  const j = exportJson(), box = $('#exportBox');
+  const fallback = () => { box.value = j; box.hidden = false; box.focus(); box.select(); toast('Markerat – kopiera med Ctrl/Cmd+C'); };
+  try { navigator.clipboard.writeText(j).then(() => toast('Kopierat'), fallback); } catch { fallback(); }
+};
+if (!FRAMED){
+  const dl = $('#btnDownload'); dl.hidden = false;
+  dl.onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportJson()], {type:'application/json'})); a.download = 'blatandsradar-' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'-') + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+}
+
+/* ---------- Sökläge ---------- */
+const SR = { baseline:new Set(), started:Date.now(), learnUntil:0, alerted:new Set(), autoDone:new Set(), peak:null, peakId:null, vibrate:false, lastVib:0, wake:null, wakeOn:false, q:'', names:[] };
+try { SR.names = JSON.parse(localStorage.getItem('bt-radar-search-names') || '[]').filter(x => typeof x === 'string'); } catch {}
+function saveNames(){ try { localStorage.setItem('bt-radar-search-names', JSON.stringify(SR.names)); } catch {} }
+function resetSearch(learnMs){
+  SR.baseline = new Set(S.devices.keys()); SR.started = Date.now(); SR.learnUntil = Date.now() + learnMs;
+  SR.alerted = new Set(); SR.autoDone = new Set(); SR.peak = null; SR.peakId = null;
+}
+function notePeak(d, now){
+  if (SR.peakId !== d.id){ SR.peakId = d.id; SR.peak = null; }
+  if (d.ema != null && (!SR.peak || d.ema > SR.peak.r)) SR.peak = {r:d.ema, t:now};
+}
+function chirp(){
+  if (!S.sound) return;
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const t0 = actx.currentTime;
+    [660, 990].forEach((f, i) => { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = f; g.gain.setValueAtTime(0.09, t0 + i*0.12); g.gain.exponentialRampToValueAtTime(0.0001, t0 + i*0.12 + 0.1); o.connect(g).connect(actx.destination); o.start(t0 + i*0.12); o.stop(t0 + i*0.12 + 0.11); });
+  } catch {}
+}
+const matchesSaved = d => d.name && SR.names.some(n => d.name.toLowerCase().includes(n.toLowerCase()));
+function searchTick(){
+  const now = Date.now();
+  if (now < SR.learnUntil) for (const id of S.devices.keys()) SR.baseline.add(id);
+  const recent = [...S.devices.values()].filter(d => now - d.last < 30000 && d.ema != null);
+  const fresh = recent.filter(d => !SR.baseline.has(d.id));
+  for (const d of fresh){
+    if (SR.alerted.has(d.id)) continue;
+    SR.alerted.add(d.id);
+    toast('Ny enhet: ' + displayName(d)); chirp();
+    try { SR.vibrate && navigator.vibrate && navigator.vibrate([60, 60, 60]); } catch {}
+  }
+  for (const d of recent){
+    if (!matchesSaved(d) || SR.autoDone.has(d.id)) continue;
+    SR.autoDone.add(d.id);
+    const cur = S.devices.get(S.pinned);
+    if (!cur || !matchesSaved(cur)){ S.pinned = d.id; toast('Hittade ' + d.name + ' – följer den nu'); chirp(); try { SR.vibrate && navigator.vibrate && navigator.vibrate([120, 80, 120]); } catch {} }
+  }
+  $('#cntSearch').textContent = fresh.length;
+  $('#cntSearch').classList.toggle('alert', fresh.length > 0);
+  return {recent, fresh};
+}
+function renderHud(){
+  const el = $('#hudLive'), d = S.devices.get(S.pinned), now = Date.now();
+  const actsEl = $('#hudActs'), acts = hudActs();
+  if (actsEl._h !== acts){ actsEl.innerHTML = acts; actsEl._h = acts; bindHud(); }
+  if (!d){
+    el.innerHTML = '<div class="orb lost"><span class="n">–</span><span class="u">dBm</span></div><div class="bigtrend">Inget mål</div><p class="meta">Välj en enhet i listan eller lägg till ett sparat sökmål. Gå sedan långsamt runt och följ siffran.</p>';
+    return;
+  }
+  const lost = now - d.last > 8000, tr = lost ? {k:'', t:'Ingen signal'} : trend(d);
+  const sc = d.ema == null ? .7 : .7 + strength(d.ema) * .3;
+  let hint = '';
+  if (SR.peakId === d.id && SR.peak && d.ema != null && SR.peak.r - d.ema > 8 && now - SR.peak.t < 90000)
+    hint = `<p class="hint">Signalen var starkare för ${fmtAgo(now - SR.peak.t)} sedan. Gå tillbaka dit och prova en annan riktning.</p>`;
+  else if (lost) hint = '<p class="hint">Enheten hörs inte just nu. Stå still en stund, håll telefonen fritt framför dig och vänd dig sakta runt.</p>';
+  el.innerHTML = `<div class="tgt"><b>${esc(displayName(d))}</b>${matchesSaved(d) ? '<span class="pill ok">Sökmål</span>' : ''}</div>
+    <div class="orb ${lost ? 'lost' : tr.k}" style="transform:scale(${sc.toFixed(3)})"><span class="n">${d.ema == null ? '–' : Math.round(d.ema)}</span><span class="u">dBm</span></div>
+    <div class="bigtrend ${tr.k}">${tr.t}</div>
+    <p class="meta">${fmtDist(distance(d))}${SR.peakId === d.id && SR.peak ? ` · Starkast hittills ${Math.round(SR.peak.r)} dBm` : ''}</p>
+    ${hint}`;
+}
+const hudActs = () => `<div class="acts">
+  <button type="button" class="small" id="hSound" aria-pressed="${S.sound}">Ljud</button>
+  <button type="button" class="small" id="hVib" aria-pressed="${SR.vibrate}"${navigator.vibrate ? '' : ' hidden'}>Vibration</button>
+  <button type="button" class="small" id="hWake" aria-pressed="${SR.wakeOn}"${'wakeLock' in navigator ? '' : ' hidden'}>Håll skärmen tänd</button>
+  ${S.pinned ? '<button type="button" class="small" id="hDrop">Släpp mål</button>' : ''}</div>`;
+function bindHud(){
+  $('#hSound').onclick = () => { S.sound = !S.sound; try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch {} renderAll(); };
+  const v = $('#hVib'); if (v) v.onclick = () => { SR.vibrate = !SR.vibrate; try { SR.vibrate && navigator.vibrate(40); } catch {} renderHud(); };
+  const w = $('#hWake'); if (w) w.onclick = toggleWake;
+  const x = $('#hDrop'); if (x) x.onclick = () => { S.pinned = null; renderAll(); };
+}
+async function toggleWake(){
+  if (SR.wakeOn){ SR.wakeOn = false; try { SR.wake && await SR.wake.release(); } catch {} SR.wake = null; renderHud(); return; }
+  try { SR.wake = await navigator.wakeLock.request('screen'); SR.wakeOn = true; toast('Skärmen hålls tänd'); }
+  catch { showNote('Skärmen kunde inte hållas tänd här. Ändra tiden för automatisk skärmlåsning i telefonens inställningar under sökningen.', 'warn'); }
+  renderHud();
+}
+document.addEventListener('visibilitychange', async () => { if (SR.wakeOn && document.visibilityState === 'visible'){ try { SR.wake = await navigator.wakeLock.request('screen'); } catch {} } });
+function renderSearchList(recent){
+  const now = Date.now(), C = colors(), q = SR.q.trim().toLowerCase();
+  let list = recent.filter(d => !q || (d.name || '').toLowerCase().includes(q) || d.cls.label.toLowerCase().includes(q));
+  list.sort((a,b) => (SR.baseline.has(a.id) - SR.baseline.has(b.id)) || (matchesSaved(b) - matchesSaved(a)) || b.ema - a.ema);
+  const learning = now < SR.learnUntil;
+  $('#searchList').innerHTML = (learning ? '<div class="empty">Lär in omgivningen… Det som syns de första sekunderna räknas som känt.</div>' : '') +
+    (list.length ? list.slice(0, 40).map(d => {
+      const isNew = !SR.baseline.has(d.id);
+      return `<button type="button" class="dev${d.id === S.pinned ? ' is-pinned' : ''}" data-sid="${esc(d.id)}">
+      <span class="dot" style="background:${kindColor(d, C)}"></span>
+      <span class="t">${isNew ? '<span class="newchip">NY</span>' : ''}${esc(displayName(d))}</span>
+      <span class="r"><span class="mono">${Math.round(d.ema)} dBm</span><span class="bar"><div style="width:${Math.round(strength(d.ema)*100)}%"></div></span></span>
+      <span class="s">${esc(d.name ? d.cls.label : 'id ' + d.id.slice(0,8))}${isNew ? ' · dök upp ' + fmtAgo(now - d.first) + ' sedan' : ''} · ${fmtDist(distance(d))}</span></button>`;
+    }).join('') : `<div class="empty">${q ? 'Inget matchar "' + esc(SR.q) + '" just nu.' : 'Inga enheter hörs just nu.'}</div>`);
+}
+function renderSaved(){
+  $('#savedList').innerHTML = SR.names.length ? SR.names.map((n, i) => `<span>${esc(n)}<button type="button" data-unsave="${i}" aria-label="Ta bort ${esc(n)}">×</button></span>`).join('') : '<p class="muted" style="font-size:.85rem">Inga sparade sökmål än.</p>';
+}
+function renderSearch(){
+  const {recent} = searchTick();
+  if (S.tab !== 'search') return;
+  renderHud(); renderSearchList(recent); renderSaved();
+  const lim = $('#searchLimit');
+  const canScan = navigator.bluetooth && navigator.bluetooth.requestLEScan;
+  if (S.mode !== 'demo' && S.mode !== 'live' && !canScan){
+    lim.hidden = false;
+    lim.innerHTML = '<div>' + (IOS
+      ? 'iPhone kan inte lyssna fritt efter alla enheter, så sökläget kan inte följa en väns signal. Du kan däremot se vilka <b>namngivna enheter</b> som finns i närheten.'
+      : 'Fri skanning är avstängd. Slå på <code>chrome://flags/#enable-experimental-web-platform-features</code> och tryck på <b>Starta skanning</b>. Under tiden kan du se namngivna enheter i närheten.') +
+      ' <button type="button" class="small" id="btnNearNamed" style="margin-top:6px">Visa namngivna enheter</button></div>';
+    $('#btnNearNamed').onclick = addDevice;
+  } else lim.hidden = true;
+}
+setInterval(() => { if (S.tab === 'search') renderHud(); }, 300);
+$('#searchQ').oninput = e => { SR.q = e.target.value; renderSearch(); };
+$('#searchList').addEventListener('click', e => { const b = e.target.closest('[data-sid]'); if (!b) return; S.pinned = b.dataset.sid; renderAll(); });
+$('#btnRelearn').onclick = () => { resetSearch(0); toast('Allt som syns nu räknas som känt'); renderAll(); };
+$('#btnSave').onclick = () => { const v = $('#savedIn').value.trim(); if (!v) return; if (!SR.names.some(n => n.toLowerCase() === v.toLowerCase())) SR.names.push(v); saveNames(); $('#savedIn').value = ''; SR.autoDone = new Set(); renderAll(); toast('Sökmål sparat'); };
+$('#savedIn').onkeydown = e => { if (e.key === 'Enter') $('#btnSave').click(); };
+$('#savedList').addEventListener('click', e => { const b = e.target.closest('[data-unsave]'); if (!b) return; SR.names.splice(+b.dataset.unsave, 1); saveNames(); renderAll(); });
+
+/* ---------- Pejling med kompass ---------- */
+const PJ = {active:false, t0:0, bins:[], heading:null, live:false, result:null, listening:false, demo:false, timer:null};
+const DIRS = ['norr','nordost','öster','sydost','söder','sydväst','väster','nordväst'];
+const dirName = deg => DIRS[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+function resetBins(){ PJ.bins = Array.from({length:24}, () => ({s:0, n:0})); }
+resetBins();
+function onOrient(e){
+  let h = null;
+  if (e.webkitCompassHeading != null) h = e.webkitCompassHeading;
+  else if (e.absolute && e.alpha != null) h = (360 - e.alpha) % 360;
+  if (h != null){ PJ.heading = h; PJ.live = true; }
+}
+function listenOrient(){
+  if (PJ.listening) return;
+  PJ.listening = true;
+  if ('ondeviceorientationabsolute' in window) window.addEventListener('deviceorientationabsolute', onOrient);
+  else window.addEventListener('deviceorientation', onOrient);
+}
+function pjAdd(rssi){
+  if (!PJ.active || PJ.heading == null) return;
+  const i = Math.floor((((PJ.heading % 360) + 360) % 360) / 15) % 24;
+  PJ.bins[i].s += rssi; PJ.bins[i].n++;
+}
+async function startPejl(){
+  if (PJ.active){ finishPejl(); return; }
+  if (!S.devices.get(S.pinned)){ toast('Välj först en enhet att pejla'); return; }
+  resetBins(); PJ.result = null; PJ.t0 = Date.now(); PJ.demo = S.mode === 'demo';
+  if (!PJ.demo){
+    try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission){ const p = await DeviceOrientationEvent.requestPermission(); if (p !== 'granted') throw new Error('nekad'); } }
+    catch { showNote('Appen fick inte använda kompassen. Tillåt rörelse och orientering för sidan och försök igen.', 'warn'); return; }
+    listenOrient();
+    setTimeout(() => { if (PJ.active && !PJ.live){ PJ.active = false; clearInterval(PJ.timer); showNote('Ingen kompass hittades. Pejling kräver en mobil med kompass, till exempel en Android-telefon i Chrome.', 'warn'); renderPejlTxt(); } }, 2500);
+  }
+  PJ.active = true;
+  clearInterval(PJ.timer);
+  PJ.timer = setInterval(() => {
+    if (PJ.demo) PJ.heading = ((Date.now() - PJ.t0) / 1000 * 11) % 360;
+    const cov = PJ.bins.filter(b => b.n).length;
+    if (Date.now() - PJ.t0 > 45000 || (cov >= 23 && Date.now() - PJ.t0 > 15000)) finishPejl();
+  }, 100);
+  renderPejlTxt();
+}
+function finishPejl(){
+  PJ.active = false; clearInterval(PJ.timer);
+  const avg = PJ.bins.map(b => b.n ? b.s / b.n : null);
+  const cov = avg.filter(v => v != null).length;
+  if (cov < 6){ PJ.result = {fail:true, cov}; renderPejlTxt(); return; }
+  const sm = avg.map((v, i) => { let s = 0, w = 0; [[-1,1],[0,2],[1,1]].forEach(([o, k]) => { const x = avg[(i + o + 24) % 24]; if (x != null){ s += x*k; w += k; } }); return w ? s / w : null; });
+  let bi = 0; sm.forEach((v, i) => { if (v != null && (sm[bi] == null || v > sm[bi])) bi = i; });
+  const vals = sm.filter(v => v != null), spread = Math.max(...vals) - Math.min(...vals);
+  PJ.result = {deg:bi * 15 + 7.5, avg, sm, cov, spread, conf: spread >= 6 && cov >= 14 ? 'Tydlig' : spread >= 3 ? 'Osäker' : 'Ingen tydlig'};
+  chirp(); renderPejlTxt();
+}
+function renderPejlTxt(){
+  const el = $('#pejlTxt'), b = $('#btnPejl');
+  b.textContent = PJ.active ? 'Klar' : PJ.result ? 'Pejla igen' : 'Pejla';
+  if (PJ.active){
+    const cov = PJ.bins.filter(x => x.n).length;
+    el.innerHTML = `<b>Vrid dig långsamt ett helt varv</b><br>Håll telefonen platt framför bröstet och ta ungefär 30 sekunder på varvet. ${Math.round(cov / 24 * 100)} % klart.`;
+  } else if (PJ.result && PJ.result.fail){
+    el.innerHTML = 'För lite mätdata. Vrid dig långsammare och se till att enheten hörs under tiden.';
+  } else if (PJ.result){
+    const r = PJ.result;
+    el.innerHTML = r.conf === 'Ingen tydlig'
+      ? '<b>Ingen tydlig riktning</b><br>Signalen var lika stark åt alla håll. Enheten är troligen mycket nära, eller så studsar signalen. Gå 20–30 meter och pejla igen.'
+      : `<b>Starkast åt ${dirName(r.deg)} (${Math.round(r.deg)}°)</b><br>${r.conf === 'Tydlig' ? 'Tydlig skillnad' : 'Osäker – liten skillnad'} på ${Math.round(r.spread)} dBm mellan bästa och sämsta riktning.${PJ.live ? ' Pilen pekar dit när du håller telefonen platt.' : ''}`;
+  } else {
+    el.innerHTML = 'Välj en enhet och tryck på <b>Pejla</b>. Din kropp skymmer signalen bakåt, så den blir starkast när du står vänd mot enheten.';
+  }
+}
+function fitCanvas(cv){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth || 280, h = cv.clientHeight || w;
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  const c = cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h); return {c, w, h};
+}
+function hexRgb(h){ h = h.replace('#',''); if (h.length === 3) h = h.split('').map(x => x+x).join(''); const n = parseInt(h, 16); return [n>>16 & 255, n>>8 & 255, n & 255]; }
+function mixHex(a, b, t){ try { const A = hexRgb(a), B = hexRgb(b); return 'rgb(' + A.map((v, i) => Math.round(v + (B[i]-v)*t)).join(',') + ')'; } catch { return a; } }
+function drawPejl(){
+  const {c, w} = fitCanvas($('#pejlCv')), C = colors(), cx = w/2, R = w/2 - 22;
+  const head = PJ.heading != null && (PJ.live || PJ.demo) ? PJ.heading : 0;
+  const rot = deg => (deg - head - 90) * Math.PI / 180;
+  c.strokeStyle = C.line; c.lineWidth = 1;
+  [1, .66, .33].forEach(f => { c.beginPath(); c.arc(cx, cx, R*f, 0, Math.PI*2); c.stroke(); });
+  c.font = '600 12px ' + getComputedStyle(document.body).getPropertyValue('--f-body'); c.textAlign = 'center'; c.textBaseline = 'middle';
+  [['N',0],['O',90],['S',180],['V',270]].forEach(([t, d]) => { c.fillStyle = t === 'N' ? C.crit : C.muted; c.fillText(t, cx + Math.cos(rot(d))*(R+12), cx + Math.sin(rot(d))*(R+12)); });
+  const data = PJ.result && PJ.result.sm ? PJ.result.sm : PJ.bins.map(b => b.n ? b.s / b.n : null);
+  const vals = data.filter(v => v != null);
+  if (vals.length){
+    const lo = Math.min(...vals) - 2, hi = Math.max(...vals);
+    data.forEach((v, i) => {
+      if (v == null) return;
+      const f = hi > lo ? (v - lo) / (hi - lo) : .5;
+      c.fillStyle = mixHex(C.accent, C.crit, f); c.globalAlpha = .35 + .5 * f;
+      c.beginPath(); c.moveTo(cx, cx); c.arc(cx, cx, R * (.25 + .75 * f), rot(i*15), rot(i*15 + 15)); c.closePath(); c.fill();
+    });
+    c.globalAlpha = 1;
+  }
+  if (PJ.active){ c.strokeStyle = C.fg; c.lineWidth = 2; c.beginPath(); c.moveTo(cx, cx); c.lineTo(cx + Math.cos(rot(head))*R, cx + Math.sin(rot(head))*R); c.stroke(); }
+  if (PJ.result && !PJ.result.fail && PJ.result.conf !== 'Ingen tydlig'){
+    const a = rot(PJ.result.deg), L = R * .92;
+    c.strokeStyle = C.fg; c.fillStyle = C.fg; c.lineWidth = 4; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(cx, cx); c.lineTo(cx + Math.cos(a)*L, cx + Math.sin(a)*L); c.stroke();
+    c.beginPath(); c.moveTo(cx + Math.cos(a)*(L+8), cx + Math.sin(a)*(L+8)); c.lineTo(cx + Math.cos(a+2.6)*14 + Math.cos(a)*L, cx + Math.sin(a+2.6)*14 + Math.sin(a)*L); c.lineTo(cx + Math.cos(a-2.6)*14 + Math.cos(a)*L, cx + Math.sin(a-2.6)*14 + Math.sin(a)*L); c.closePath(); c.fill();
+  }
+  c.fillStyle = C.fg; c.beginPath(); c.arc(cx, cx, 5, 0, Math.PI*2); c.fill();
+  c.fillStyle = C.muted; c.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--f-mono'); c.textAlign = 'left'; c.fillText(PJ.live || PJ.demo ? '↑ framåt' : 'norr upp', 2, 10);
+}
+$('#btnPejl').onclick = startPejl;
+
+/* ---------- Spårkarta ---------- */
+const TR = {active:false, pts:[], cur:null, watch:null, demo:false, demoTimer:null, demoDist:null};
+const DEMO_ORIGIN = {lat:61.02, lon:14.52};
+function trDemoRssi(){ return TR.demoDist == null ? -95 : -50 - 22 * Math.log10(Math.max(1, TR.demoDist)); }
+function demoPinnedBase(t){
+  if (PJ.active && PJ.demo && PJ.heading != null) return -68 + 9 * Math.cos((PJ.heading - 130) * Math.PI / 180);
+  if (TR.active && TR.demo) return trDemoRssi();
+  return -78 + 30 * (0.5 + 0.5 * Math.sin(t / 7));
+}
+function trPush(lat, lon, acc){
+  const now = Date.now(); TR.cur = {lat, lon, acc};
+  S.geo = S.geo || null;
+  const d = S.devices.get(S.pinned);
+  const r = d && now - d.last < 8000 && d.ema != null ? d.ema : null;
+  const last = TR.pts[TR.pts.length - 1];
+  if (last && haversine(last, {lat, lon}) < 3 && now - last.t < 5000) return;
+  TR.pts.push({lat, lon, acc:acc == null ? null : Math.round(acc), r:r == null ? null : Math.round(r), t:now, id:S.pinned || null});
+}
+function trToggle(){
+  if (TR.active){ trStop(); return; }
+  TR.demo = S.mode === 'demo'; TR.active = true;
+  if (TR.demo){
+    const t0 = Date.now(), friend = {x:70, y:40};
+    TR.demoTimer = setInterval(() => {
+      const s = (Date.now() - t0) / 1000, Rr = Math.max(3, 130 - s * 2.6), a = s * 0.11;
+      const x = friend.x + Math.cos(a) * Rr, y = friend.y + Math.sin(a) * Rr;
+      TR.demoDist = Math.hypot(x - friend.x, y - friend.y);
+      trPush(DEMO_ORIGIN.lat + y / 110540, DEMO_ORIGIN.lon + x / (111320 * Math.cos(DEMO_ORIGIN.lat * Math.PI / 180)), 6);
+    }, 1200);
+    toast('Demo: du går i en spiral mot en gömd enhet');
+  } else {
+    if (!navigator.geolocation){ showNote('Webbläsaren ger ingen plats, så spåret kan inte spelas in.', 'warn'); TR.active = false; return; }
+    TR.watch = navigator.geolocation.watchPosition(p => { trPush(p.coords.latitude, p.coords.longitude, p.coords.accuracy); S.geo = {lat:p.coords.latitude, lon:p.coords.longitude}; },
+      e => { trStop(); showNote(FRAMED ? 'Platsen är blockerad på den publicerade sidan. Spårkartan fungerar i offline-filen och på din GitHub-sida.' : 'Platsen nekades eller saknas: ' + esc(e.message) + '. Slå på Platstjänster och tillåt platsen för sidan.', 'warn'); },
+      {enableHighAccuracy:true, maximumAge:0, timeout:30000});
+    if (!S.pinned) toast('Inget mål valt – spåret spelas in utan signal tills du väljer en enhet');
+  }
+  renderTrackTxt();
+}
+function trStop(){
+  TR.active = false; clearInterval(TR.demoTimer); TR.demoTimer = null; TR.demoDist = null;
+  if (TR.watch != null){ try { navigator.geolocation.clearWatch(TR.watch); } catch {} TR.watch = null; }
+  renderTrackTxt();
+}
+function trBest(){ let b = null; for (const p of TR.pts) if (p.r != null && (!b || p.r > b.r)) b = p; return b; }
+function renderTrackTxt(){
+  $('#btnTrack').textContent = TR.active ? 'Stoppa' : TR.pts.length ? 'Fortsätt spela in' : 'Spela in spår';
+  let len = 0; for (let i = 1; i < TR.pts.length; i++) len += haversine(TR.pts[i-1], TR.pts[i]);
+  const b = trBest();
+  $('#trackTxt').textContent = TR.pts.length
+    ? `${TR.pts.length} punkter · ${len < 1000 ? Math.round(len) + ' m' : (len/1000).toFixed(1).replace('.', ',') + ' km'} gått${b ? ' · starkast ' + b.r + ' dBm (ringen)' : ''}`
+    : (TR.active ? 'Väntar på position…' : 'Spela in medan du letar. Spåret färgas efter hur stark signalen var på varje plats.');
+  const a = $('#trackLink');
+  if (b && !TR.demo){ a.hidden = false; a.href = `https://www.openstreetmap.org/?mlat=${b.lat.toFixed(6)}&mlon=${b.lon.toFixed(6)}#map=18/${b.lat.toFixed(6)}/${b.lon.toFixed(6)}`; }
+  else a.hidden = true;
+}
+function drawTrack(){
+  const {c, w, h} = fitCanvas($('#trackCv')), C = colors(), pad = 26;
+  const all = TR.pts.concat(TR.cur ? [TR.cur] : []);
+  c.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--f-mono'); c.textBaseline = 'middle';
+  if (!all.length){ c.fillStyle = C.muted; c.textAlign = 'center'; c.fillText('Inget spår ännu', w/2, h/2); return; }
+  const o = all[0], kx = 111320 * Math.cos(o.lat * Math.PI / 180), ky = 110540;
+  const P = p => ({x:(p.lon - o.lon) * kx, y:(p.lat - o.lat) * ky});
+  const xy = all.map(P);
+  let x0 = Math.min(...xy.map(p => p.x)), x1 = Math.max(...xy.map(p => p.x)), y0 = Math.min(...xy.map(p => p.y)), y1 = Math.max(...xy.map(p => p.y));
+  const span = Math.max(40, x1 - x0, (y1 - y0) * (w - 2*pad) / (h - 2*pad));
+  const sc = (w - 2*pad) / span, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const S2 = p => { const q = P(p); return {x:w/2 + (q.x - mx) * sc, y:h/2 - (q.y - my) * sc}; };
+  // väg
+  c.strokeStyle = C.line; c.lineWidth = 2; c.beginPath();
+  TR.pts.forEach((p, i) => { const q = S2(p); i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y); }); c.stroke();
+  // punkter – färg skalas efter spårets egna min/max så skillnaden syns
+  const rs = TR.pts.filter(p => p.r != null).map(p => p.r), rlo = Math.min(...rs), rhi = Math.max(...rs);
+  const tcol = r => rs.length && rhi - rlo >= 6 ? (r - rlo) / (rhi - rlo) : strength(r);
+  for (const p of TR.pts){
+    const q = S2(p);
+    if (p.r == null){ c.fillStyle = C.line; c.beginPath(); c.arc(q.x, q.y, 2.5, 0, Math.PI*2); c.fill(); continue; }
+    c.fillStyle = mixHex(C.accent, C.crit, tcol(p.r)); c.beginPath(); c.arc(q.x, q.y, 5, 0, Math.PI*2); c.fill();
+  }
+  const b = trBest();
+  if (b){ const q = S2(b); c.strokeStyle = C.crit; c.lineWidth = 2.5; c.beginPath(); c.arc(q.x, q.y, 11, 0, Math.PI*2); c.stroke(); c.fillStyle = C.fg; const right = q.x > w - 70; c.textAlign = right ? 'right' : 'left'; c.fillText(b.r + ' dBm', right ? q.x - 14 : q.x + 14, q.y); }
+  if (TR.cur){ const q = S2(TR.cur);
+    if (TR.cur.acc){ c.fillStyle = C.fg; c.globalAlpha = .08; c.beginPath(); c.arc(q.x, q.y, Math.min(TR.cur.acc * sc, w), 0, Math.PI*2); c.fill(); c.globalAlpha = 1; }
+    c.fillStyle = C.panel; c.beginPath(); c.arc(q.x, q.y, 7, 0, Math.PI*2); c.fill(); c.fillStyle = C.fg; c.beginPath(); c.arc(q.x, q.y, 5, 0, Math.PI*2); c.fill(); }
+  // norrpil + skala
+  c.fillStyle = C.muted; c.textAlign = 'center'; c.fillText('N ↑', w - 18, 14);
+  const nice = [5,10,20,50,100,200,500,1000,2000].find(v => v * sc >= 50) || 2000, L = nice * sc;
+  c.strokeStyle = C.muted; c.lineWidth = 2; c.beginPath(); c.moveTo(12, h - 12); c.lineTo(12 + L, h - 12); c.stroke();
+  c.textAlign = 'left'; c.fillText(nice < 1000 ? nice + ' m' : nice/1000 + ' km', 12, h - 24);
+}
+$('#btnTrack').onclick = trToggle;
+$('#btnTrackClear').onclick = () => { TR.pts = []; TR.cur = null; renderTrackTxt(); };
+setInterval(() => { if (S.tab !== 'search') return; drawPejl(); drawTrack(); if (PJ.active) renderPejlTxt(); }, 150);
+setInterval(() => { if (S.tab === 'search') renderTrackTxt(); }, 1000);
+renderPejlTxt(); renderTrackTxt();
+
+/* ---------- Start ---------- */
+setInterval(renderAll, 1000);
+renderInspector();
+let startTab = 'radar'; try { startTab = localStorage.getItem('bt-radar-tab') || 'radar'; } catch {}
+if (!['radar','search','warn','insp','help'].includes(startTab)) startTab = 'radar';
+startDemo();
+setTab(startTab);
+if (FRAMED) showNote('Det här är demoläget. Publicerade sidor får inte använda Bluetooth, så öppna <b>offline-filen</b> i Chrome eller Edge för att skanna på riktigt.', '');
+else if (!navigator.bluetooth && IOS) showNote('Demoläge. Safari och Chrome på iPhone saknar Bluetooth för webbsidor. Öppna appen i webbläsaren <b>Bluefy</b> för att använda den på riktigt – se fliken Hjälp.', 'warn');
+else if (!navigator.bluetooth) showNote('Demoläge. Den här webbläsaren saknar Web Bluetooth – använd Chrome eller Edge på Android eller dator för att skanna på riktigt.', 'warn');
+else if (IOS && !navigator.bluetooth.requestLEScan) showNote('Bluetooth fungerar. Tryck på <b>Lägg till enhet</b> för att hålla koll på dina saker, eller använd Inspektören. Radar och Spårningsvarnare visar demo eftersom iPhone inte tillåter fri skanning.', '');
+requestAnimationFrame(draw);
+if (!FRAMED && REG.length && navigator.bluetooth && navigator.bluetooth.getDevices){
+  navigator.bluetooth.getDevices().then(async list => {
+    const hits = list.filter(d => REG.some(r => r.id === d.id));
+    for (const d of hits) await attachDevice(d);
+    if (hits.length) toast('Återansluter ' + hits.length + ' sparade enheter');
+  }).catch(() => {});
+}
+})();
+</script>
+
+</body>
+</html>
