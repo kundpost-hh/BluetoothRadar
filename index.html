@@ -114,14 +114,17 @@ select,input[type=number]{font:inherit;font-size:.875rem;color:var(--fg);backgro
 .bar{width:84px;height:5px;border-radius:3px;background:var(--sunk);overflow:hidden}
 .bar>div{height:100%;background:var(--muted)}
 .empty{padding:22px 6px;color:var(--muted);font-size:.9rem}
-.mine{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:10px 4px;border-top:1px solid var(--line)}
+.mine{display:grid;grid-template-columns:10px minmax(0,1fr);gap:4px 12px;align-items:center;padding:12px 4px;border-top:1px solid var(--line)}
+.mine .t{grid-column:2;grid-row:1}
+.mine .s{grid-column:2;grid-row:2}
+.mine .b{grid-column:2;grid-row:3;justify-content:flex-start!important;margin-top:6px}
 .mine:first-of-type{border-top:0}
-.mine .dot{width:10px;height:10px;border-radius:50%;grid-row:span 2;background:var(--muted)}
+.mine .dot{width:10px;height:10px;border-radius:50%;grid-column:1;grid-row:1;background:var(--muted)}
 .mine.in .dot{background:var(--ok)}
 .mine.out .dot{background:var(--crit)}
 .mine .t{font-weight:600;overflow-wrap:anywhere}
 .mine .s{font-size:.78rem;color:var(--muted)}
-.mine .b{grid-row:span 2;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.mine .b{display:flex;gap:6px;flex-wrap:wrap}
 .pill.ok{background:var(--ok-soft);color:var(--ok)}
 /* Sökläge */
 .hud{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;padding-block:20px}
@@ -248,7 +251,7 @@ textarea#exportBox{width:100%;min-height:140px;font:.75rem/1.4 var(--f-mono);bac
       <div class="panel" id="minePanel" hidden>
         <div class="listhead"><h2>Mina enheter</h2><span class="muted" style="font-size:.8rem" id="mineMode"></span></div>
         <div id="mineList"></div>
-        <p class="muted" style="font-size:.78rem;margin-top:8px">Slå på <b>Larm</b> för att få en signal när en sak hamnar utom räckhåll. Larmet fungerar bara medan appen är öppen och skärmen tänd. Räckviddskollen utan skanning ansluter kort till enheten; hörlurar och telefoner tillåter ofta inte det, men nyckelbrickor, sensorer och de flesta BLE-prylar gör det.</p>
+        <p class="muted" style="font-size:.78rem;margin-top:8px"><b>Telefonlarm</b> – telefonen piper när prylen hamnar utom räckhåll. <b>Pip</b> – prylen själv piper så att du hittar den. <b>Pryllarm</b> – prylen piper av sig själv om telefonen kommer för långt bort. Pip och Pryllarm fungerar på nyckelbrickor och andra prylar som stöder det; appen säger till om en pryl inte gör det. Stäng av Pryllarm innan du stänger appen, annars piper prylen. Larmen fungerar bara medan appen är öppen och skärmen tänd.</p>
       </div>
       <div class="panel">
         <div class="listhead">
@@ -417,8 +420,8 @@ const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform 
 
 /* ---------- Referensdata ---------- */
 const COMPANIES = {0x004C:'Apple',0x0006:'Microsoft',0x0075:'Samsung',0x00E0:'Google',0x0087:'Garmin',0x0059:'Nordic Semiconductor',0x0157:'Huami/Amazfit',0x012D:'Sony',0x0057:'Harman (JBL)',0x038F:'Xiaomi',0x027D:'Huawei'};
-const SERVICES = {'1800':'Generic Access','1801':'Generic Attribute','180a':'Enhetsinformation','180f':'Batteri','180d':'Puls','1809':'Termometer','181a':'Miljösensor','1816':'Cykel – fart och kadens','1818':'Cykel – effekt','181c':'Användardata','1812':'HID (tangentbord/mus)','fe59':'Nordic DFU (firmware)'};
-const CHARS = {'2a00':'Enhetsnamn','2a01':'Utseende','2a19':'Batterinivå','2a24':'Modellnummer','2a25':'Serienummer','2a26':'Firmware','2a27':'Hårdvara','2a28':'Mjukvara','2a29':'Tillverkare','2a37':'Pulsmätning','2a38':'Sensorplacering','2a6e':'Temperatur','2a6f':'Luftfuktighet','2a1c':'Temperaturmätning','2a05':'Tjänster ändrade'};
+const SERVICES = {'1800':'Generic Access','1801':'Generic Attribute','180a':'Enhetsinformation','180f':'Batteri','180d':'Puls','1809':'Termometer','181a':'Miljösensor','1816':'Cykel – fart och kadens','1818':'Cykel – effekt','181c':'Användardata','1812':'HID (tangentbord/mus)','fe59':'Nordic DFU (firmware)','1802':'Omedelbart larm (pip)','1803':'Larm vid tappad anslutning'};
+const CHARS = {'2a00':'Enhetsnamn','2a01':'Utseende','2a19':'Batterinivå','2a24':'Modellnummer','2a25':'Serienummer','2a26':'Firmware','2a27':'Hårdvara','2a28':'Mjukvara','2a29':'Tillverkare','2a37':'Pulsmätning','2a38':'Sensorplacering','2a6e':'Temperatur','2a6f':'Luftfuktighet','2a1c':'Temperaturmätning','2a05':'Tjänster ändrade','2a06':'Larmnivå'};
 const OPT_SERVICES = Object.keys(SERVICES).map(h => parseInt(h,16));
 const TEXT_CHARS = new Set(['2a00','2a24','2a25','2a26','2a27','2a28','2a29']);
 const shortU = u => { const m = /^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$/i.exec(String(u)); return m ? m[1].toLowerCase() : String(u).toLowerCase(); };
@@ -601,6 +604,7 @@ async function addDevice(){
 async function attachDevice(dev){
   if (S.mode === 'demo'){ stopDemo(); S.devices.clear(); S.mode = 'add'; S.pinned = null; setMode(); }
   regAdd(dev.id, dev.name);
+  DEVS.set(dev.id, dev);
   if (!dev.watchAdvertisements){
       addMine(dev);
       showNote(IOS
@@ -776,7 +780,7 @@ const DREG = [
   {id:'demo-garmin', name:'Forerunner 255', label:'Min klocka', alarm:false}];
 let MINE_EDIT = null;
 const reg = () => S.mode === 'demo' ? DREG : REG;
-function saveReg(){ if (S.mode === 'demo') return; try { localStorage.setItem(REG_KEY, JSON.stringify(REG.map(({id, name, label, alarm}) => ({id, name, label, alarm})))); } catch {} }
+function saveReg(){ if (S.mode === 'demo') return; try { localStorage.setItem(REG_KEY, JSON.stringify(REG.map(({id, name, label, alarm, linkLoss}) => ({id, name, label, alarm, linkLoss:!!linkLoss})))); } catch {} }
 function regFor(d){ return reg().find(r => r.id === d.id || (r.name && d.name && r.name === d.name)); }
 function regAdd(id, name, label){
   const L = reg(); let r = L.find(x => x.id === id);
@@ -791,22 +795,86 @@ function findDev(r){
 function addMine(dev){
   if (mine.has(dev.id)){ checkMine(dev.id); return; }
   mine.set(dev.id, {dev, name:dev.name || 'Namnlös enhet', status:'check', lastOk:null, battery:null, busy:false, fails:0, timer:setInterval(() => checkMine(dev.id), 20000)});
+  dev.addEventListener('gattserverdisconnected', () => {
+    const m = mine.get(dev.id);
+    if (m && keepConn(dev.id) && !m.busy){ m.status = 'out'; m.fails = 2; renderMine(); setTimeout(() => checkMine(dev.id), 3000); }
+  });
   renderMine(); checkMine(dev.id);
 }
 async function checkMine(id){
   const m = mine.get(id); if (!m || m.busy) return;
   m.busy = true; if (m.status !== 'in' && m.status !== 'out') m.status = 'check';
   try {
-    const server = await Promise.race([m.dev.gatt.connect(), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))]);
+    const wasConnected = m.dev.gatt.connected;
+    const server = wasConnected ? m.dev.gatt : await Promise.race([m.dev.gatt.connect(), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))]);
     m.status = 'in'; m.lastOk = Date.now(); m.fails = 0;
-    try { const sv = await server.getPrimaryService(0x180f); const c = await sv.getCharacteristic(0x2a19); m.battery = (await c.readValue()).getUint8(0); } catch {}
-    try { m.dev.gatt.disconnect(); } catch {}
+    if (!wasConnected || m.battery == null){ try { const sv = await server.getPrimaryService(0x180f); const c = await sv.getCharacteristic(0x2a19); m.battery = (await c.readValue()).getUint8(0); } catch {} }
+    const rr = reg().find(x => x.id === id);
+    if (rr && rr.linkLoss && !wasConnected){ try { await alertWrite(m.dev, 0x1803, 2); } catch {} }
+    if (!keepConn(id)){ try { m.dev.gatt.disconnect(); } catch {} }
   } catch {
     m.fails++; if (m.fails >= 2 || m.status === 'check') m.status = 'out';
     try { m.dev.gatt.disconnect(); } catch {}
   }
   m.busy = false; renderMine();
 }
+/* Pip (Immediate Alert 0x1802) och Pryllarm (Link Loss 0x1803) */
+const DEVS = new Map();     // id -> BluetoothDevice som användaren gett appen tillgång till
+const PIPST = new Map();    // id -> {timer}
+const devFor = id => DEVS.get(id) || (mine.get(id) || {}).dev || null;
+function keepConn(id){ const r = reg().find(x => x.id === id); return PIPST.has(id) || !!(r && r.linkLoss); }
+async function alertWrite(dev, svc, level){
+  const server = dev.gatt.connected ? dev.gatt : await Promise.race([dev.gatt.connect(), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000))]);
+  const sv = await server.getPrimaryService(svc), c = await sv.getCharacteristic(0x2a06), v = Uint8Array.of(level);
+  if (c.writeValueWithoutResponse) { try { await c.writeValueWithoutResponse(v); return; } catch {} }
+  await c.writeValue(v);
+}
+function maybeDisconnect(id){ if (!keepConn(id)){ const d = devFor(id); try { d && d.gatt.connected && d.gatt.disconnect(); } catch {} } }
+function alertErr(r, e, what){
+  const n = e && e.name;
+  if (n === 'NotFoundError') return esc(r.label) + ' kan inte ' + what + '. Prylen saknar den funktionen – det är vanligt för hörlurar, klockor och telefoner.';
+  if (n === 'SecurityError') return 'Appen saknar behörighet för ' + what + ' på ' + esc(r.label) + '. Ta bort den och lägg till den igen med <b>Lägg till enhet</b>.';
+  return esc(r.label) + ' svarade inte. Kontrollera att den är påslagen och inom räckhåll och försök igen.';
+}
+async function togglePip(id){
+  const r = reg().find(x => x.id === id); if (!r) return;
+  if (S.mode === 'demo'){
+    if (PIPST.has(id)){ clearTimeout(PIPST.get(id).timer); PIPST.delete(id); }
+    else { PIPST.set(id, {timer:setTimeout(() => { PIPST.delete(id); renderMine(); }, 6000)}); toast('Demo: ' + r.label + ' piper'); }
+    renderMine(); return;
+  }
+  const dev = devFor(id);
+  if (!dev){ showNote('Anslut först till ' + esc(r.label) + ' med <b>Återanslut</b> eller <b>Lägg till enhet</b>.', 'warn'); return; }
+  const st = PIPST.get(id);
+  if (st){
+    clearTimeout(st.timer); PIPST.delete(id); renderMine();
+    try { await alertWrite(dev, 0x1802, 0); } catch {}
+    maybeDisconnect(id); return;
+  }
+  PIPST.set(id, {timer:setTimeout(() => { if (PIPST.has(id)) togglePip(id); }, 15000)}); renderMine();
+  try { await alertWrite(dev, 0x1802, 2); toast(r.label + ' piper – tryck Sluta pipa när du hittat den'); }
+  catch (e){ clearTimeout(PIPST.get(id)?.timer); PIPST.delete(id); maybeDisconnect(id); showNote(alertErr(r, e, 'pipa på kommando'), 'warn'); }
+  renderMine();
+}
+async function toggleLinkLoss(id){
+  const r = reg().find(x => x.id === id); if (!r) return;
+  if (S.mode === 'demo'){ r.linkLoss = !r.linkLoss; toast(r.linkLoss ? 'Demo: Pryllarm på för ' + r.label : 'Demo: Pryllarm av'); renderMine(); return; }
+  const dev = devFor(id);
+  if (!dev){ showNote('Anslut först till ' + esc(r.label) + ' med <b>Återanslut</b> eller <b>Lägg till enhet</b>.', 'warn'); return; }
+  try {
+    if (!r.linkLoss){
+      await alertWrite(dev, 0x1803, 2); r.linkLoss = true; saveReg();
+      if (!mine.has(id)) addMine(dev);
+      toast('Pryllarm på – ' + r.label + ' piper om telefonen kommer för långt bort');
+    } else {
+      try { await alertWrite(dev, 0x1803, 0); } catch {}
+      r.linkLoss = false; saveReg(); maybeDisconnect(id);
+      toast('Pryllarm av för ' + r.label);
+    }
+  } catch (e){ r.linkLoss = false; saveReg(); maybeDisconnect(id); showNote(alertErr(r, e, 'larma själv'), 'warn'); }
+  renderMine();
+}
+
 function regStatus(r){
   const now = Date.now(), m = mine.get(r.id);
   if (m) return {s:m.status, sub:(m.lastOk ? 'Senast svar för ' + fmtAgo(now - m.lastOk) + ' sedan' : 'Inget svar än') + (m.battery != null ? ' · batteri ' + m.battery + ' %' : '')};
@@ -845,6 +913,9 @@ function handleAlarm(r, s){
   if (r.alarm && !r._muted && prev === 'in' && s === 'out' && !AL.active.has(r.id)){ AL.active.add(r.id); alarmUpdate(); }
 }
 function removeReg(id){
+  if (PIPST.has(id)){ clearTimeout(PIPST.get(id).timer); PIPST.delete(id); }
+  { const r0 = reg().find(x => x.id === id); const d0 = devFor(id); if (r0 && r0.linkLoss && d0 && S.mode !== 'demo'){ r0.linkLoss = false; alertWrite(d0, 0x1803, 0).catch(() => {}); } }
+  DEVS.delete(id);
   const m = mine.get(id); if (m){ clearInterval(m.timer); try { m.dev.gatt.disconnect(); } catch {} mine.delete(id); }
   const L = reg(), i = L.findIndex(r => r.id === id); if (i >= 0) L.splice(i, 1);
   if (AL.active.delete(id)) alarmUpdate();
@@ -868,7 +939,7 @@ function mineRowHtml(r){
     <span class="t">${editing ? `<input id="mineEditIn" type="text" value="${esc(r.label)}" aria-label="Nytt namn" maxlength="40">` : esc(r.label)} <span class="pill mut" data-pill style="margin-left:6px">–</span></span>
     <span class="b">${editing
       ? '<button type="button" class="small primary" data-msave>Spara</button><button type="button" class="small" data-mcancel>Avbryt</button>'
-      : `<button type="button" class="small" data-malarm="${esc(r.id)}" aria-pressed="${!!r.alarm}">Larm</button><button type="button" class="small" data-mren="${esc(r.id)}">Döp om</button><button type="button" class="small" data-mcheck="${esc(r.id)}" hidden>Kolla nu</button><button type="button" class="small" data-mrecon="${esc(r.id)}" hidden>Återanslut</button><button type="button" class="small" data-mdel="${esc(r.id)}">Ta bort</button>`}</span>
+      : `<button type="button" class="small" data-mpip="${esc(r.id)}">Pip</button><button type="button" class="small" data-malarm="${esc(r.id)}" aria-pressed="${!!r.alarm}" title="Telefonen piper när prylen hamnar utom räckhåll">Telefonlarm</button><button type="button" class="small" data-mll="${esc(r.id)}" aria-pressed="${!!r.linkLoss}" title="Prylen piper av sig själv om telefonen kommer för långt bort">Pryllarm</button><button type="button" class="small" data-mren="${esc(r.id)}">Döp om</button><button type="button" class="small" data-mcheck="${esc(r.id)}" hidden>Kolla nu</button><button type="button" class="small" data-mrecon="${esc(r.id)}" hidden>Återanslut</button><button type="button" class="small" data-mdel="${esc(r.id)}">Ta bort</button>`}</span>
     <span class="s" data-sub>${r.name && r.name !== r.label ? esc(r.name) + ' · ' : ''}</span></div>`;
 }
 function renderMine(){
@@ -876,7 +947,7 @@ function renderMine(){
   $('#minePanel').hidden = !L.length;
   if (!L.length) return;
   $('#mineMode').textContent = S.mode === 'demo' ? 'Exempel i demon' : mine.size ? 'Kollas var 20:e sekund' : '';
-  const sig = S.mode + '|' + L.map(r => r.id + ':' + r.label + ':' + r.alarm + ':' + (MINE_EDIT === r.id)).join(';');
+  const sig = S.mode + '|' + L.map(r => r.id + ':' + r.label + ':' + r.alarm + ':' + !!r.linkLoss + ':' + (MINE_EDIT === r.id)).join(';');
   if (el._sig !== sig){
     el._sig = sig; el.innerHTML = L.map(mineRowHtml).join('');
     const inp = $('#mineEditIn'); if (inp){ inp.focus(); inp.select(); }
@@ -890,7 +961,9 @@ function renderMine(){
     pill.className = 'pill ' + P[0]; pill.textContent = P[1];
     row.querySelector('[data-sub]').textContent = (r.name && r.name !== r.label ? r.name + ' · ' : '') + st.sub;
     const ck = row.querySelector('[data-mcheck]'); if (ck) ck.hidden = !mine.has(r.id);
-    const rc = row.querySelector('[data-mrecon]'); if (rc) rc.hidden = S.mode === 'demo' || mine.has(r.id) || st.s === 'in';
+    const rc = row.querySelector('[data-mrecon]'); if (rc) rc.hidden = S.mode === 'demo' || mine.has(r.id) || DEVS.has(r.id) || st.s === 'in';
+    const pb = row.querySelector('[data-mpip]'); if (pb){ const on = PIPST.has(r.id); pb.textContent = on ? 'Sluta pipa' : 'Pip'; pb.setAttribute('aria-pressed', String(on)); }
+    if (PIPST.has(r.id)){ pill.className = 'pill warn'; pill.textContent = 'Piper'; }
   }
 }
 function saveEdit(){
@@ -905,12 +978,14 @@ document.addEventListener('click', e => {
   else if (ds.mdel) removeReg(ds.mdel);
   else if (ds.mrecon) reconnect(ds.mrecon);
   else if (ds.mren){ MINE_EDIT = ds.mren; renderMine(); }
+  else if (ds.mpip) togglePip(ds.mpip);
+  else if (ds.mll) toggleLinkLoss(ds.mll);
   else if (ds.malarm){
     const r = reg().find(x => x.id === ds.malarm); if (!r) return;
     r.alarm = !r.alarm; r._muted = false; saveReg();
     try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume && actx.resume(); } catch {}
     if (!r.alarm && AL.active.delete(r.id)) alarmUpdate();
-    toast(r.alarm ? 'Larm på för ' + r.label : 'Larm av för ' + r.label); renderMine();
+    toast(r.alarm ? 'Telefonlarm på för ' + r.label : 'Telefonlarm av för ' + r.label); renderMine();
   }
   else if ('msave' in ds) saveEdit();
   else if ('mcancel' in ds){ MINE_EDIT = null; renderMine(); }
@@ -939,7 +1014,7 @@ function renderInspector(){
   const el = $('#inspPanel'), m = S.insp;
   $('#btnDisconnect').disabled = !m;
   if (!m){ el.innerHTML = '<h2>Ingen enhet ansluten</h2><p class="muted" style="margin-top:6px;font-size:.9rem">Välj en enhet för att se dess tjänster och värden. Prova demon med ett pulsband om du inte har någon enhet till hands.</p>'; return; }
-  el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:8px"><h2>${esc(m.name)}</h2><span class="mono muted" style="font-size:.78rem">id ${esc(m.id.slice(0,12))}</span></div>` +
+  el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:8px"><h2>${esc(m.name)}</h2><span style="display:flex;gap:8px;align-items:center">${m.services.some(x => x.uuid === '1802') ? '<button type="button" class="small primary" data-ipip>Pip</button>' : ''}<span class="mono muted" style="font-size:.78rem">id ${esc(m.id.slice(0,12))}</span></span></div>` +
     (m.services.length ? m.services.map((s, si) => `<details class="svc" open><summary><b>${esc(SERVICES[s.uuid] || 'Okänd tjänst')}</b><span class="mono muted" style="font-size:.78rem">${esc(s.uuid)}</span></summary>${
       s.chars.length ? s.chars.map((c, ci) => {
         const p = c.props || {}, tags = ['read','write','writeWithoutResponse','notify','indicate'].filter(k => p[k]).map(k => ({read:'läs',write:'skriv',writeWithoutResponse:'skriv*',notify:'notis',indicate:'indikera'}[k]));
@@ -981,7 +1056,7 @@ async function inspectReal(){
       const chars = await s.getCharacteristics().catch(() => []);
       model.services.push({uuid:shortU(s.uuid), chars:chars.map(c => {
         let handler = null;
-        return {uuid:shortU(c.uuid), props:c.properties, read:() => c.readValue(),
+        return {uuid:shortU(c.uuid), props:c.properties, read:() => c.readValue(), write:v => c.writeValueWithoutResponse ? c.writeValueWithoutResponse(v).catch(() => c.writeValue(v)) : c.writeValue(v),
           start: async cb => { handler = e => cb(e.target.value); c.addEventListener('characteristicvaluechanged', handler); await c.startNotifications(); },
           stop: async () => { await c.stopNotifications(); if (handler) c.removeEventListener('characteristicvaluechanged', handler); }};
       })});
@@ -1063,6 +1138,12 @@ document.querySelectorAll('.tab').forEach(b => b.onclick = () => setTab(b.datase
 $('#devList').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; S.pinned = S.pinned === b.dataset.id ? null : b.dataset.id; renderAll(); });
 $('#trkBody').addEventListener('click', e => { const b = e.target.closest('[data-hunt]'); if (!b) return; S.pinned = b.dataset.hunt; setTab('radar'); });
 $('#inspPanel').addEventListener('click', e => {
+  const ip = e.target.closest('[data-ipip]');
+  if (ip && S.insp){
+    const c = (S.insp.services.find(x => x.uuid === '1802') || {chars:[]}).chars.find(x => x.uuid === '2a06');
+    if (c && c.write){ c.write(Uint8Array.of(2)).then(() => { log('Skickade pip'); toast('Piper i 5 sekunder'); setTimeout(() => c.write(Uint8Array.of(0)).catch(() => {}), 5000); }).catch(err => log('Pip misslyckades: ' + (err.message || err.name))); }
+    return;
+  }
   const r = e.target.closest('[data-read]'), n = e.target.closest('[data-notify]');
   if (r){ const [si,ci] = r.dataset.read.split('.').map(Number); readChar(si, ci); }
   if (n){ const [si,ci] = n.dataset.notify.split('.').map(Number); toggleNotify(si, ci); }
