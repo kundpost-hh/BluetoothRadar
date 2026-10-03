@@ -306,7 +306,8 @@ textarea#exportBox{width:100%;min-height:140px;font:.75rem/1.4 var(--f-mono);bac
 
   <!-- VARNARE -->
   <section id="view-warn" hidden style="display:flex;flex-direction:column;gap:14px">
-    <div class="stats">
+    <div class="note warn" id="warnLimit" hidden></div>
+    <div class="stats" id="warnStats">
       <div class="stat"><span class="lbl">Enheter just nu</span><span class="v" id="stNow">0</span></div>
       <div class="stat"><span class="lbl">Spårare i närheten</span><span class="v" id="stTrk">0</span></div>
       <div class="stat" id="stFolBox"><span class="lbl">Följer med dig</span><span class="v" id="stFol">0</span></div>
@@ -319,7 +320,7 @@ textarea#exportBox{width:100%;min-height:140px;font:.75rem/1.4 var(--f-mono);bac
           <button id="btnGeo" type="button" class="small">Använd min plats</button>
         </div>
       </div>
-      <div class="tablewrap">
+      <div class="tablewrap" id="warnTable">
         <table>
           <thead><tr><th>Typ</th><th>Först sedd</th><th>Med dig i</th><th>Signaler</th><th>Senast</th><th>Förflyttning</th><th>Status</th><th></th></tr></thead>
           <tbody id="trkBody"></tbody>
@@ -716,6 +717,13 @@ function renderWarn(){
   $('#cntRadar').textContent = nowList.length;
   const cw = $('#cntWarn'); cw.textContent = fol || trk.filter(x => x.st.rank > 0).length; cw.classList.toggle('alert', fol > 0);
   if (S.tab !== 'warn') return;
+  const cantScan = S.mode !== 'live' && !(navigator.bluetooth && navigator.bluetooth.requestLEScan && !(S.cancels >= 2 && /Windows/i.test(navigator.userAgent)));
+  const lim = $('#warnLimit');
+  lim.hidden = !cantScan; $('#warnStats').hidden = cantScan; $('#warnTable').hidden = cantScan;
+  if (cantScan) lim.innerHTML = '<div><b>Spårningsvarnaren fungerar inte här.</b> ' + (IOS
+    ? 'iPhone låter inte webbsidor lyssna efter alla enheter, så appen kan inte se spårare – inte heller om det finns några. Använd iPhones inbyggda skydd: slå på <b>Hitta</b>, <b>Bluetooth</b> och <b>Platstjänster</b>, så varnar iPhone själv för okända AirTags och andra spårare.'
+    : 'Den här webbläsaren kan inte lyssna efter alla enheter, så appen kan inte se spårare – inte heller om det finns några. Använd Chrome på en Android-telefon, eller telefonens inbyggda varning för okända spårare.') + '</div>';
+  if (cantScan) return;
   $('#trkBody').innerHTML = trk.length ? trk.map(({d, st}) => {
     const mv = moved(d);
     return `<tr>
