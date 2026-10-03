@@ -214,10 +214,9 @@ textarea#exportBox{width:100%;min-height:140px;font:.75rem/1.4 var(--f-mono);bac
       <div><h1>Blåtandsradar</h1><small>Hitta dina saker · upptäck spårare · inspektera enheter</small></div>
     </div>
     <div class="controls">
-      <span id="modeChip" class="chip demo">Demo</span>
+      <span id="modeChip" class="chip off">Inte igång</span>
       <button id="btnLive" class="primary" type="button">Starta skanning</button>
       <button id="btnAdd" type="button" title="Välj en enhet i Chromes lista och följ dess signal">Lägg till enhet</button>
-      <button id="btnDemo" type="button">Visa demo</button>
     </div>
   </header>
 
@@ -342,7 +341,6 @@ textarea#exportBox{width:100%;min-height:140px;font:.75rem/1.4 var(--f-mono);bac
       <p class="muted" style="font-size:.875rem">Chrome visar en lista där du väljer enheten. Appen ansluter, läser ut tjänster och värden som enheten delar, till exempel batterinivå, tillverkare eller puls.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="btnInspect" class="primary" type="button">Välj enhet…</button>
-        <button id="btnInspectDemo" type="button">Demo: pulsband</button>
         <button id="btnDisconnect" type="button" disabled>Koppla från</button>
       </div>
       <div class="lbl">Logg</div>
@@ -386,7 +384,7 @@ textarea#exportBox{width:100%;min-height:140px;font:.75rem/1.4 var(--f-mono);bac
         <li>Safari och Chrome på iPhone saknar Bluetooth för webbsidor. Installera den kostnadsfria webbläsaren <b>Bluefy</b> från App Store.</li>
         <li>Lägg appen på en https-adress, till exempel GitHub Pages, och öppna adressen i Bluefy.</li>
         <li>Använd <b>Lägg till enhet</b> för att se om dina egna saker är inom räckhåll, och <b>Inspektören</b> för att läsa av dem.</li>
-        <li>iPhone tillåter inte fri skanning, så Radar och Spårningsvarnare visar bara demo. Mot spårare skyddar iPhones egna varningar i Hitta.</li>
+        <li>iPhone tillåter inte fri skanning, så Radar och Spårningsvarnare förblir tomma där. Mot spårare skyddar iPhones egna varningar i Hitta.</li>
       </ul>
     </div>
     <div>
@@ -428,7 +426,7 @@ const shortU = u => { const m = /^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$
 const hex = b => Array.from(b, x => x.toString(16).padStart(2,'0')).join(' ');
 
 /* ---------- Tillstånd ---------- */
-const S = { devices:new Map(), mode:'demo', scan:null, pinned:null, demoTimer:null, thr:10, geo:null, geoWatch:null, sound:false, filter:'all', tab:'radar', insp:null, demoT0:Date.now() };
+const S = { devices:new Map(), mode:'stopped', scan:null, pinned:null, demoTimer:null, thr:10, geo:null, geoWatch:null, sound:false, filter:'all', tab:'radar', insp:null, demoT0:Date.now() };
 
 /* ---------- Klassning ---------- */
 function classify(d){
@@ -502,53 +500,7 @@ function onAdv(e){
   beepFor(e.device.id);
 }
 
-/* ---------- Demo ---------- */
-const DEMO = [
-  {id:'demo-airtag', name:'', base:-70, mfr:{0x004C:[0x12,0x19,0x10,0x4a,0x7e]}, firstAgo:27*60e3, count:310, moved:640},
-  {id:'demo-tile', name:'', base:-87, uuids:['feed'], firstAgo:4*60e3, count:22},
-  {id:'demo-pixel', name:'Pixel 8', base:-63, mfr:{0x00E0:[0x01,0x02]}},
-  {id:'demo-buds', name:'Galaxy Buds2', base:-52, mfr:{0x0075:[0x42,0x09]}},
-  {id:'demo-jbl', name:'JBL Flip 6', base:-77, mfr:{0x0057:[0x01]}, gap:true},
-  {id:'demo-band', name:'Mi Smart Band 7', base:-81, mfr:{0x038F:[0x00]}},
-  {id:'demo-hrm', name:'HRM-Dual', base:-66, uuids:['180d','180f']},
-  {id:'demo-ap1', name:'', base:-73, mfr:{0x004C:[0x10,0x05]}},
-  {id:'demo-ap2', name:'', base:-84, mfr:{0x004C:[0x10,0x07]}},
-  {id:'demo-tv', name:'[TV] Samsung 7 Series', base:-86, mfr:{0x0075:[0x42,0x04]}},
-  {id:'demo-garmin', name:'Forerunner 255', base:-69, mfr:{0x0087:[0x01]}},
-  {id:'demo-ms', name:'', base:-91, mfr:{0x0006:[0x01,0x09]}, flicker:true},
-  {id:'demo-friend', name:'Forerunner 965', base:-89, mfr:{0x0087:[0x02]}, appearAfter:9}
-];
-const toMap = o => new Map(Object.entries(o || {}).map(([k,v]) => [Number(k), Uint8Array.from(v)]));
-function startDemo(){
-  stopLive(); stopDemo();
-  S.devices.clear(); S.mode = 'demo'; S.demoT0 = Date.now();
-  const now = Date.now();
-  for (const p of DEMO){
-    if (p.appearAfter) continue;
-    ingest({id:p.id, name:p.name, rssi:p.base, mfr:toMap(p.mfr), uuids:p.uuids, t:now});
-    const d = S.devices.get(p.id);
-    d.first = now - (p.firstAgo ?? (60e3 + Math.random()*6*60e3));
-    d.count = p.count ?? Math.round(20 + Math.random()*200);
-    if (p.moved != null) d.demoMoved = p.moved;
-  }
-  S.pinned = 'demo-airtag';
-  S.demoTimer = setInterval(() => {
-    const t = (Date.now() - S.demoT0) / 1000;
-    for (const p of DEMO){
-      if (p.appearAfter && t < p.appearAfter) continue;
-      if (p.gap && (t % 90) > 30 && (t % 90) < 75) continue;
-      if (Math.random() < (p.flicker ? .15 : .55) && !(p.id === S.pinned && (PJ.active || TR.active))) continue;
-      let base = p.base;
-      if (p.id === S.pinned) base = demoPinnedBase(t);
-      ingest({id:p.id, name:p.name, rssi:Math.round(base + (Math.random()-.5)*6), mfr:toMap(p.mfr), uuids:p.uuids});
-      if (p.id === S.pinned) beepFor(p.id);
-    }
-  }, 450);
-  resetSearch(0);
-  setMode();
-  hideNote();
-}
-function stopDemo(){ if (S.demoTimer){ clearInterval(S.demoTimer); S.demoTimer = null; } }
+function stopDemo(){}
 
 /* ---------- Live-skanning ---------- */
 function btError(e){
@@ -556,7 +508,7 @@ function btError(e){
   if (n === 'NotFoundError') return 'Ingen enhet valdes.';
   if (n === 'SecurityError' || n === 'NotAllowedError'){
     return FRAMED
-      ? 'Bluetooth är blockerat på den här publicerade sidan. Öppna <b>offline-filen</b> direkt i Chrome eller Edge för att skanna på riktigt. Demon fungerar här.'
+      ? 'Bluetooth är blockerat på den här publicerade sidan. Öppna appen på din GitHub-sida i Chrome eller Edge för att skanna på riktigt.'
       : 'Bluetooth nekades. Kontrollera att Bluetooth är på, att sidan fått tillåtelse och att den öppnats via https, localhost eller som lokal fil.';
   }
   return 'Bluetooth svarade: ' + esc(e && e.message || String(e));
@@ -602,7 +554,7 @@ async function addDevice(){
   } catch (e){ if (e.name !== 'NotFoundError') showNote(btError(e), 'crit'); }
 }
 async function attachDevice(dev){
-  if (S.mode === 'demo'){ stopDemo(); S.devices.clear(); S.mode = 'add'; S.pinned = null; setMode(); }
+  if (S.mode === 'stopped'){ S.mode = 'add'; setMode(); }
   regAdd(dev.id, dev.name);
   DEVS.set(dev.id, dev);
   if (!dev.watchAdvertisements){
@@ -624,11 +576,11 @@ function ingestPlaceholder(dev){
 }
 function setMode(){
   const c = $('#modeChip'), b = $('#btnLive');
-  const map = {demo:['demo','Demo'], live:['live','Skannar live'], add:['live','Följer valda enheter'], stopped:['off','Stoppad']};
+  const map = {live:['live','Skannar live'], add:['live','Följer valda enheter'], stopped:['off', S.scanWasOn ? 'Stoppad' : 'Inte igång']};
   const [cls, txt] = map[S.mode] || map.stopped;
   c.className = 'chip ' + cls; c.textContent = txt;
   b.textContent = S.mode === 'live' ? 'Stoppa skanning' : 'Starta skanning';
-  $('#btnDemo').hidden = S.mode === 'demo';
+  if (S.mode === 'live') S.scanWasOn = true;
   renderAll();
 }
 
@@ -724,7 +676,7 @@ function renderList(){
   const C = colors();
   const el = $('#devList');
   if (!list.length){
-    el.innerHTML = `<div class="empty">${S.mode === 'live' ? 'Lyssnar… Enheter dyker upp här när de sänder.' : S.mode === 'add' ? 'Väntar på signal från vald enhet. Den måste vara påslagen och i närheten.' : 'Inga enheter. Starta skanning eller visa demon.'}</div>`;
+    el.innerHTML = `<div class="empty">${S.mode === 'live' ? 'Lyssnar… Enheter dyker upp här när de sänder.' : S.mode === 'add' ? 'Väntar på signal från vald enhet. Den måste vara påslagen och i närheten.' : (IOS ? 'Inga enheter än. Tryck på <b>Lägg till enhet</b> för att lägga till dina egna prylar.' : 'Inga enheter än. Tryck på <b>Starta skanning</b> för att se riktiga enheter omkring dig.')}</div>`;
     return;
   }
   el.innerHTML = list.map(d => {
@@ -774,13 +726,10 @@ function renderWarn(){
 const mine = new Map();            // GATT-räckviddskoll (iPhone/utan skanning)
 const REG_KEY = 'bt-radar-mine';
 let REG = []; try { REG = JSON.parse(localStorage.getItem(REG_KEY) || '[]').filter(r => r && r.id); } catch {}
-const DREG = [
-  {id:'demo-hrm', name:'HRM-Dual', label:'Pulsbandet', alarm:false},
-  {id:'demo-jbl', name:'JBL Flip 6', label:'Högtalaren', alarm:false},
-  {id:'demo-garmin', name:'Forerunner 255', label:'Min klocka', alarm:false}];
+
 let MINE_EDIT = null;
-const reg = () => S.mode === 'demo' ? DREG : REG;
-function saveReg(){ if (S.mode === 'demo') return; try { localStorage.setItem(REG_KEY, JSON.stringify(REG.map(({id, name, label, alarm, linkLoss}) => ({id, name, label, alarm, linkLoss:!!linkLoss})))); } catch {} }
+const reg = () => REG;
+function saveReg(){ try { localStorage.setItem(REG_KEY, JSON.stringify(REG.map(({id, name, label, alarm, linkLoss}) => ({id, name, label, alarm, linkLoss:!!linkLoss})))); } catch {} }
 function regFor(d){ return reg().find(r => r.id === d.id || (r.name && d.name && r.name === d.name)); }
 function regAdd(id, name, label){
   const L = reg(); let r = L.find(x => x.id === id);
@@ -838,11 +787,6 @@ function alertErr(r, e, what){
 }
 async function togglePip(id){
   const r = reg().find(x => x.id === id); if (!r) return;
-  if (S.mode === 'demo'){
-    if (PIPST.has(id)){ clearTimeout(PIPST.get(id).timer); PIPST.delete(id); }
-    else { PIPST.set(id, {timer:setTimeout(() => { PIPST.delete(id); renderMine(); }, 6000)}); toast('Demo: ' + r.label + ' piper'); }
-    renderMine(); return;
-  }
   const dev = devFor(id);
   if (!dev){ showNote('Anslut först till ' + esc(r.label) + ' med <b>Återanslut</b> eller <b>Lägg till enhet</b>.', 'warn'); return; }
   const st = PIPST.get(id);
@@ -858,7 +802,6 @@ async function togglePip(id){
 }
 async function toggleLinkLoss(id){
   const r = reg().find(x => x.id === id); if (!r) return;
-  if (S.mode === 'demo'){ r.linkLoss = !r.linkLoss; toast(r.linkLoss ? 'Demo: Pryllarm på för ' + r.label : 'Demo: Pryllarm av'); renderMine(); return; }
   const dev = devFor(id);
   if (!dev){ showNote('Anslut först till ' + esc(r.label) + ' med <b>Återanslut</b> eller <b>Lägg till enhet</b>.', 'warn'); return; }
   try {
@@ -914,7 +857,7 @@ function handleAlarm(r, s){
 }
 function removeReg(id){
   if (PIPST.has(id)){ clearTimeout(PIPST.get(id).timer); PIPST.delete(id); }
-  { const r0 = reg().find(x => x.id === id); const d0 = devFor(id); if (r0 && r0.linkLoss && d0 && S.mode !== 'demo'){ r0.linkLoss = false; alertWrite(d0, 0x1803, 0).catch(() => {}); } }
+  { const r0 = reg().find(x => x.id === id); const d0 = devFor(id); if (r0 && r0.linkLoss && d0){ r0.linkLoss = false; alertWrite(d0, 0x1803, 0).catch(() => {}); } }
   DEVS.delete(id);
   const m = mine.get(id); if (m){ clearInterval(m.timer); try { m.dev.gatt.disconnect(); } catch {} mine.delete(id); }
   const L = reg(), i = L.findIndex(r => r.id === id); if (i >= 0) L.splice(i, 1);
@@ -946,7 +889,7 @@ function renderMine(){
   const L = reg(), el = $('#mineList');
   $('#minePanel').hidden = !L.length;
   if (!L.length) return;
-  $('#mineMode').textContent = S.mode === 'demo' ? 'Exempel i demon' : mine.size ? 'Kollas var 20:e sekund' : '';
+  $('#mineMode').textContent = mine.size ? 'Kollas var 20:e sekund' : '';
   const sig = S.mode + '|' + L.map(r => r.id + ':' + r.label + ':' + r.alarm + ':' + !!r.linkLoss + ':' + (MINE_EDIT === r.id)).join(';');
   if (el._sig !== sig){
     el._sig = sig; el.innerHTML = L.map(mineRowHtml).join('');
@@ -961,7 +904,7 @@ function renderMine(){
     pill.className = 'pill ' + P[0]; pill.textContent = P[1];
     row.querySelector('[data-sub]').textContent = (r.name && r.name !== r.label ? r.name + ' · ' : '') + st.sub;
     const ck = row.querySelector('[data-mcheck]'); if (ck) ck.hidden = !mine.has(r.id);
-    const rc = row.querySelector('[data-mrecon]'); if (rc) rc.hidden = S.mode === 'demo' || mine.has(r.id) || DEVS.has(r.id) || st.s === 'in';
+    const rc = row.querySelector('[data-mrecon]'); if (rc) rc.hidden = mine.has(r.id) || DEVS.has(r.id) || st.s === 'in';
     const pb = row.querySelector('[data-mpip]'); if (pb){ const on = PIPST.has(r.id); pb.textContent = on ? 'Sluta pipa' : 'Pip'; pb.setAttribute('aria-pressed', String(on)); }
     if (PIPST.has(r.id)){ pill.className = 'pill warn'; pill.textContent = 'Piper'; }
   }
@@ -1013,7 +956,7 @@ function decode(uuid, dv){
 function renderInspector(){
   const el = $('#inspPanel'), m = S.insp;
   $('#btnDisconnect').disabled = !m;
-  if (!m){ el.innerHTML = '<h2>Ingen enhet ansluten</h2><p class="muted" style="margin-top:6px;font-size:.9rem">Välj en enhet för att se dess tjänster och värden. Prova demon med ett pulsband om du inte har någon enhet till hands.</p>'; return; }
+  if (!m){ el.innerHTML = '<h2>Ingen enhet ansluten</h2><p class="muted" style="margin-top:6px;font-size:.9rem">Välj en enhet för att se dess tjänster och värden.</p>'; return; }
   el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:8px"><h2>${esc(m.name)}</h2><span style="display:flex;gap:8px;align-items:center">${m.services.some(x => x.uuid === '1802') ? '<button type="button" class="small primary" data-ipip>Pip</button>' : ''}<span class="mono muted" style="font-size:.78rem">id ${esc(m.id.slice(0,12))}</span></span></div>` +
     (m.services.length ? m.services.map((s, si) => `<details class="svc" open><summary><b>${esc(SERVICES[s.uuid] || 'Okänd tjänst')}</b><span class="mono muted" style="font-size:.78rem">${esc(s.uuid)}</span></summary>${
       s.chars.length ? s.chars.map((c, ci) => {
@@ -1066,24 +1009,7 @@ async function inspectReal(){
     for (let si = 0; si < model.services.length; si++) for (let ci = 0; ci < model.services[si].chars.length; ci++) if (model.services[si].chars[ci].props.read) await readChar(si, ci);
   } catch (e){ if (e.name === 'NotFoundError') log('Ingen enhet valdes.'); else { log('Fel: ' + (e.message || e.name)); showNote(btError(e), 'crit'); } }
 }
-function demoInspect(){
-  disconnect();
-  const dv = arr => new DataView(Uint8Array.from(arr).buffer);
-  const txt = s => new DataView(new TextEncoder().encode(s).buffer);
-  let timer = null;
-  const ro = (uuid, fn) => ({uuid, props:{read:true}, read: async () => fn()});
-  S.insp = {name:'HRM-Dual (demo)', id:'demo-hrm-0001', dev:null, services:[
-    {uuid:'180d', chars:[
-      {uuid:'2a37', props:{notify:true}, start: async cb => { timer = setInterval(() => cb(dv([0, 118 + Math.round(Math.sin(Date.now()/4000)*14 + Math.random()*4)])), 1000); }, stop: async () => clearInterval(timer)},
-      ro('2a38', () => dv([1]))]},
-    {uuid:'180f', chars:[{...ro('2a19', () => dv([82])), props:{read:true, notify:true}, start: async cb => cb(dv([82])), stop: async () => {}}]},
-    {uuid:'180a', chars:[ro('2a29', () => txt('Garmin')), ro('2a24', () => txt('HRM-Dual')), ro('2a26', () => txt('3.20'))]}
-  ]};
-  S.insp.cleanup = () => clearInterval(timer);
-  log('Demo: ansluten till HRM-Dual.');
-  renderInspector();
-  S.insp.services.forEach((s, si) => s.chars.forEach((c, ci) => { if (c.props.read) readChar(si, ci); }));
-}
+
 async function disconnect(){
   const m = S.insp; if (!m) return;
   try { m.cleanup && m.cleanup(); } catch {}
@@ -1126,13 +1052,11 @@ function setTab(t){
 /* ---------- Händelser ---------- */
 $('#btnLive').onclick = startLive;
 $('#btnAdd').onclick = addDevice;
-$('#btnDemo').onclick = startDemo;
 $('#noteClose').onclick = hideNote;
 $('#filter').onchange = e => { S.filter = e.target.value; renderList(); };
 $('#thr').onchange = e => { S.thr = Math.max(1, Math.min(120, +e.target.value || 10)); renderWarn(); };
 $('#btnGeo').onclick = toggleGeo;
 $('#btnInspect').onclick = inspectReal;
-$('#btnInspectDemo').onclick = demoInspect;
 $('#btnDisconnect').onclick = disconnect;
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 $('#devList').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; S.pinned = S.pinned === b.dataset.id ? null : b.dataset.id; renderAll(); });
@@ -1260,7 +1184,7 @@ function renderSearch(){
   renderHud(); renderSearchList(recent); renderSaved();
   const lim = $('#searchLimit');
   const canScan = navigator.bluetooth && navigator.bluetooth.requestLEScan;
-  if (S.mode !== 'demo' && S.mode !== 'live' && !canScan){
+  if (S.mode !== 'live' && !canScan){
     lim.hidden = false;
     lim.innerHTML = '<div>' + (IOS
       ? 'iPhone kan inte lyssna fritt efter alla enheter, så sökläget kan inte följa en väns signal. Du kan däremot se vilka <b>namngivna enheter</b> som finns i närheten.'
@@ -1303,7 +1227,7 @@ function pjAdd(rssi){
 async function startPejl(){
   if (PJ.active){ finishPejl(); return; }
   if (!S.devices.get(S.pinned)){ toast('Välj först en enhet att pejla'); return; }
-  resetBins(); PJ.result = null; PJ.t0 = Date.now(); PJ.demo = S.mode === 'demo';
+  resetBins(); PJ.result = null; PJ.t0 = Date.now(); PJ.demo = false;
   if (!PJ.demo){
     try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission){ const p = await DeviceOrientationEvent.requestPermission(); if (p !== 'granted') throw new Error('nekad'); } }
     catch { showNote('Appen fick inte använda kompassen. Tillåt rörelse och orientering för sidan och försök igen.', 'warn'); return; }
@@ -1313,7 +1237,6 @@ async function startPejl(){
   PJ.active = true;
   clearInterval(PJ.timer);
   PJ.timer = setInterval(() => {
-    if (PJ.demo) PJ.heading = ((Date.now() - PJ.t0) / 1000 * 11) % 360;
     const cov = PJ.bins.filter(b => b.n).length;
     if (Date.now() - PJ.t0 > 45000 || (cov >= 23 && Date.now() - PJ.t0 > 15000)) finishPejl();
   }, 100);
@@ -1388,13 +1311,6 @@ $('#btnPejl').onclick = startPejl;
 
 /* ---------- Spårkarta ---------- */
 const TR = {active:false, pts:[], cur:null, watch:null, demo:false, demoTimer:null, demoDist:null};
-const DEMO_ORIGIN = {lat:61.02, lon:14.52};
-function trDemoRssi(){ return TR.demoDist == null ? -95 : -50 - 22 * Math.log10(Math.max(1, TR.demoDist)); }
-function demoPinnedBase(t){
-  if (PJ.active && PJ.demo && PJ.heading != null) return -68 + 9 * Math.cos((PJ.heading - 130) * Math.PI / 180);
-  if (TR.active && TR.demo) return trDemoRssi();
-  return -78 + 30 * (0.5 + 0.5 * Math.sin(t / 7));
-}
 function trPush(lat, lon, acc){
   const now = Date.now(); TR.cur = {lat, lon, acc};
   S.geo = S.geo || null;
@@ -1406,17 +1322,8 @@ function trPush(lat, lon, acc){
 }
 function trToggle(){
   if (TR.active){ trStop(); return; }
-  TR.demo = S.mode === 'demo'; TR.active = true;
-  if (TR.demo){
-    const t0 = Date.now(), friend = {x:70, y:40};
-    TR.demoTimer = setInterval(() => {
-      const s = (Date.now() - t0) / 1000, Rr = Math.max(3, 130 - s * 2.6), a = s * 0.11;
-      const x = friend.x + Math.cos(a) * Rr, y = friend.y + Math.sin(a) * Rr;
-      TR.demoDist = Math.hypot(x - friend.x, y - friend.y);
-      trPush(DEMO_ORIGIN.lat + y / 110540, DEMO_ORIGIN.lon + x / (111320 * Math.cos(DEMO_ORIGIN.lat * Math.PI / 180)), 6);
-    }, 1200);
-    toast('Demo: du går i en spiral mot en gömd enhet');
-  } else {
+  TR.demo = false; TR.active = true;
+  {
     if (!navigator.geolocation){ showNote('Webbläsaren ger ingen plats, så spåret kan inte spelas in.', 'warn'); TR.active = false; return; }
     TR.watch = navigator.geolocation.watchPosition(p => { trPush(p.coords.latitude, p.coords.longitude, p.coords.accuracy); S.geo = {lat:p.coords.latitude, lon:p.coords.longitude}; },
       e => { trStop(); showNote(FRAMED ? 'Platsen är blockerad på den publicerade sidan. Spårkartan fungerar i offline-filen och på din GitHub-sida.' : 'Platsen nekades eller saknas: ' + esc(e.message) + '. Slå på Platstjänster och tillåt platsen för sidan.', 'warn'); },
@@ -1426,7 +1333,7 @@ function trToggle(){
   renderTrackTxt();
 }
 function trStop(){
-  TR.active = false; clearInterval(TR.demoTimer); TR.demoTimer = null; TR.demoDist = null;
+  TR.active = false;
   if (TR.watch != null){ try { navigator.geolocation.clearWatch(TR.watch); } catch {} TR.watch = null; }
   renderTrackTxt();
 }
@@ -1439,7 +1346,7 @@ function renderTrackTxt(){
     ? `${TR.pts.length} punkter · ${len < 1000 ? Math.round(len) + ' m' : (len/1000).toFixed(1).replace('.', ',') + ' km'} gått${b ? ' · starkast ' + b.r + ' dBm (ringen)' : ''}`
     : (TR.active ? 'Väntar på position…' : 'Spela in medan du letar. Spåret färgas efter hur stark signalen var på varje plats.');
   const a = $('#trackLink');
-  if (b && !TR.demo){ a.hidden = false; a.href = `https://www.openstreetmap.org/?mlat=${b.lat.toFixed(6)}&mlon=${b.lon.toFixed(6)}#map=18/${b.lat.toFixed(6)}/${b.lon.toFixed(6)}`; }
+  if (b){ a.hidden = false; a.href = `https://www.openstreetmap.org/?mlat=${b.lat.toFixed(6)}&mlon=${b.lon.toFixed(6)}#map=18/${b.lat.toFixed(6)}/${b.lon.toFixed(6)}`; }
   else a.hidden = true;
 }
 function drawTrack(){
@@ -1487,12 +1394,15 @@ setInterval(renderAll, 1000);
 renderInspector();
 let startTab = 'radar'; try { startTab = localStorage.getItem('bt-radar-tab') || 'radar'; } catch {}
 if (!['radar','search','warn','insp','help'].includes(startTab)) startTab = 'radar';
-startDemo();
+resetSearch(0);
+setMode();
 setTab(startTab);
-if (FRAMED) showNote('Det här är demoläget. Publicerade sidor får inte använda Bluetooth, så öppna <b>offline-filen</b> i Chrome eller Edge för att skanna på riktigt.', '');
-else if (!navigator.bluetooth && IOS) showNote('Demoläge. Safari och Chrome på iPhone saknar Bluetooth för webbsidor. Öppna appen i webbläsaren <b>Bluefy</b> för att använda den på riktigt – se fliken Hjälp.', 'warn');
-else if (!navigator.bluetooth) showNote('Demoläge. Den här webbläsaren saknar Web Bluetooth – använd Chrome eller Edge på Android eller dator för att skanna på riktigt.', 'warn');
-else if (IOS && !navigator.bluetooth.requestLEScan) showNote('Bluetooth fungerar. Tryck på <b>Lägg till enhet</b> för att hålla koll på dina saker, eller använd Inspektören. Radar och Spårningsvarnare visar demo eftersom iPhone inte tillåter fri skanning.', '');
+if (FRAMED) showNote('Bluetooth fungerar inte här i Claude. Öppna appen på <a href="https://kundpost-hh.github.io/BluetoothRadar/" target="_blank" rel="noopener">kundpost-hh.github.io/BluetoothRadar</a> i Chrome eller Edge för att se riktiga enheter.', 'warn');
+else if (!navigator.bluetooth && IOS) showNote('Safari och Chrome på iPhone saknar Bluetooth för webbsidor. Öppna appen i webbläsaren <b>Bluefy</b> – se fliken Hjälp.', 'warn');
+else if (!navigator.bluetooth) showNote('Den här webbläsaren saknar Web Bluetooth. Använd Chrome eller Edge på Android eller dator.', 'warn');
+else if (IOS && !navigator.bluetooth.requestLEScan) showNote('Tryck på <b>Lägg till enhet</b> för att hålla koll på dina saker, eller använd Inspektören. iPhone tillåter inte fri skanning, så Radar och Spårningsvarnare förblir tomma.', '');
+else if (!navigator.bluetooth.requestLEScan) showNote('Fri skanning är avstängd i din Chrome. Öppna <code>chrome://flags/#enable-experimental-web-platform-features</code>, välj Enabled och starta om Chrome. Tryck sedan på <b>Starta skanning</b>.', 'warn');
+else showNote('Tryck på <b>Starta skanning</b> för att se riktiga Bluetooth-enheter omkring dig.', '');
 requestAnimationFrame(draw);
 if (!FRAMED && REG.length && navigator.bluetooth && navigator.bluetooth.getDevices){
   navigator.bluetooth.getDevices().then(async list => {
